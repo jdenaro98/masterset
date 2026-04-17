@@ -178,8 +178,9 @@ async def discover_products(ctx: BrowserContext) -> list[Product]:
     products: list[Product] = []
     page = await ctx.new_page()
     page_num = 1
+    consecutive_non_set_pages = 0
 
-    while True:
+    while consecutive_non_set_pages < 2:
         url = SET_SEARCH_URL.format(page=page_num)
         log(f"  → page {page_num}: {url}")
         try:
@@ -206,6 +207,7 @@ async def discover_products(ctx: BrowserContext) -> list[Product]:
         card_links = await page.query_selector_all("a[href*='/product/']")
         seen_ids: set[str] = {p.product_id for p in products}
         new_on_page = 0
+        set_products_on_page = 0
 
         for link_el in card_links:
             try:
@@ -230,6 +232,19 @@ async def discover_products(ctx: BrowserContext) -> list[Product]:
                 # Strip excess whitespace / newlines
                 name = re.sub(r"\s+", " ", name).strip()
                 if not name:
+                    continue
+
+                # ── Verify this product is from the S12a VSTAR Universe set ───
+                # Check if the name/url contains set identifiers
+                is_set_product = (
+                    "vstar universe" in name.lower() or
+                    "s12a" in name.lower() or
+                    "s12a" in href.lower() or
+                    "/172" in name  # Set has 172 cards
+                )
+                
+                if not is_set_product:
+                    # Product is not from this set, skip it
                     continue
 
                 # ── Card number ──────────────────────────────────────────────
@@ -268,29 +283,22 @@ async def discover_products(ctx: BrowserContext) -> list[Product]:
                 ))
                 seen_ids.add(product_id)
                 new_on_page += 1
+                set_products_on_page += 1
 
             except Exception as exc:
                 log(f"  WARNING: error parsing product card: {exc}")
 
         log(f"  Found {new_on_page} new products on page {page_num} "
-            f"(running total: {len(products)})")
+            f"({set_products_on_page} from S12a set, running total: {len(products)})")
 
-        if new_on_page == 0:
-            log("  No new products found – end of set.")
-            break
-
-        # ── Next page ────────────────────────────────────────────────────────
-        # Try a few selector patterns for the "Next" pagination button.
-        next_btn = (
-            await page.query_selector(".tcg-pagination__right:not([disabled])") or
-            await page.query_selector("button[aria-label='Next page']:not([disabled])") or
-            await page.query_selector("a[aria-label='Next']:not([disabled])")
-        )
-        if not next_btn:
-            log("  No enabled 'Next' button found – end of pages.")
-            break
-
-        page_num += 1
+        # ── Check if we're still in the set ──────────────────────────────────
+        # If we found 0 products from the set on this page, increment counter
+        if set_products_on_page == 0:
+            consecutive_non_set_pages += 1
+            log(f"  No S12a products found on this page (streak: {consecutive_non_set_pages})")
+        else:
+            consecutive_non_set_pages = 0
+            page_num += 1
 
     await page.close()
 
@@ -344,8 +352,16 @@ async def _click_show_more(page: Page):
 
 
 def _condition_ok(text: str) -> bool:
+    """Check if condition matches accepted conditions, or if no condition is provided."""
+    if not text or text.strip() == "":
+        # If condition is empty/missing, accept it (might not be in response)
+        return True
     tl = text.lower()
-    return any(ac in tl for ac in ACCEPTED_CONDITIONS)
+    # Accept if any condition keyword is found
+    if any(ac in tl for ac in ACCEPTED_CONDITIONS):
+        return True
+    # Also accept some common variations
+    return any(x in tl for x in ("nm", "lp", "mint", "excellent", "very good"))
 
 
 async def _parse_dom_listings(page: Page, product_id: str) -> list[Listing]:
@@ -425,56 +441,62 @@ async def _parse_network_listings(
     listings: list[Listing] = []
 
     for entry in captured:
-        data = entry.get("data", {})
+        try:
+            data = entry.get("data", {})
 
-        # Shape 1: {"results": [...]}
-        results = data.get("results") or data.get("listings") or []
-        if not results and isinstance(data, list):
-            results = data
+            # Handle both dict and list response shapes
+            if isinstance(data, list):
+                results = data
+            elif isinstance(data, dict):
+                results = data.get("results") or data.get("listings") or []
+            else:
+                results = []
 
-        for item in results:
-            if not isinstance(item, dict):
-                continue
-            try:
-                seller = (
-                    item.get("sellerName") or
-                    item.get("seller", {}).get("name", "") or
-                    item.get("storeName", "")
-                )
-                if not seller:
+            for item in results:
+                if not isinstance(item, dict):
                     continue
+                try:
+                    seller = (
+                        item.get("sellerName") or
+                        item.get("seller", {}).get("name", "") or
+                        item.get("storeName", "")
+                    )
+                    if not seller:
+                        continue
 
-                condition = (
-                    item.get("conditionName") or
-                    item.get("condition", {}).get("name", "") or
-                    item.get("printing", "")
-                )
-                if not _condition_ok(condition):
-                    continue
+                    condition = (
+                        item.get("conditionName") or
+                        item.get("condition", {}).get("name", "") or
+                        item.get("printing", "")
+                    )
+                    if not _condition_ok(condition):
+                        continue
 
-                price = float(
-                    item.get("price") or
-                    item.get("lowestPrice") or
-                    item.get("buyItNowPrice") or 0
-                )
-                if price <= 0:
-                    continue
+                    price = float(
+                        item.get("price") or
+                        item.get("lowestPrice") or
+                        item.get("buyItNowPrice") or 0
+                    )
+                    if price <= 0:
+                        continue
 
-                shipping = float(
-                    item.get("shippingPrice") or
-                    item.get("shipping") or
-                    item.get("shippingCost") or 0
-                )
+                    shipping = float(
+                        item.get("shippingPrice") or
+                        item.get("shipping") or
+                        item.get("shippingCost") or 0
+                    )
 
-                listings.append(Listing(
-                    product_id=product_id,
-                    seller=seller,
-                    price=price,
-                    shipping=shipping,
-                    condition=condition,
-                ))
-            except Exception:
-                pass
+                    listings.append(Listing(
+                        product_id=product_id,
+                        seller=seller,
+                        price=price,
+                        shipping=shipping,
+                        condition=condition,
+                    ))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     return listings
 
