@@ -1,0 +1,10 @@
+{
+  "method": "Direct URL navigation to pokemon URL",
+  "url_used": "https://www.tcgplayer.com/search/pokemon/product?view=grid",
+  "sets_found": 0,
+  "sets": [],
+  "summary": {
+    "success": false,
+    "sets_with_filter": 0
+  }
+}

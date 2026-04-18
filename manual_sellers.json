@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Wylder Gaming",
+    "reputation": "99.9%",
+    "sales": "9766",
+    "condition": "Near Mint",
+    "price": "$20.50",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Showcase Games",
+    "reputation": "99.9%",
+    "sales": "1838",
+    "condition": "Near Mint",
+    "price": "$19.20",
+    "shipping": "+ $1.31 Shipping"
+  },
+  {
+    "name": "Spa City CandC",
+    "reputation": "99.8%",
+    "sales": "10000+",
+    "condition": "Near Mint",
+    "price": "$20.00",
+    "shipping": "+ $0.99 Shipping"
+  },
+  {
+    "name": "Baltaks Cards",
+    "reputation": "100%",
+    "sales": "25000+",
+    "condition": "Near Mint",
+    "price": "$21.00",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "GGAZ_CCG",
+    "reputation": "100%",
+    "sales": "50000+",
+    "condition": "Near Mint",
+    "price": "$21.22",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Round 2 Gaming",
+    "reputation": "100%",
+    "sales": "7098",
+    "condition": "Near Mint",
+    "price": "$20.19",
+    "shipping": "+ $1.27 Shipping"
+  },
+  {
+    "name": "TopDeckKeep",
+    "reputation": "100%",
+    "sales": "50000+",
+    "condition": "Near Mint",
+    "price": "$20.33",
+    "shipping": "+ $1.31 Shipping"
+  },
+  {
+    "name": "Mox Valley Games",
+    "reputation": "99.9%",
+    "sales": "50000+",
+    "condition": "Near Mint",
+    "price": "$21.65",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Tilted Gaming TCG",
+    "reputation": "99.9%",
+    "sales": "8719",
+    "condition": "Near Mint",
+    "price": "$21.65",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Winterforce Gaming",
+    "reputation": "100%",
+    "sales": "7949",
+    "condition": "Near Mint",
+    "price": "$20.35",
+    "shipping": "+ $1.31 Shipping"
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "status": "error",
+  "page_url": "https://www.tcgplayer.com/categories/trading-and-collectible-card-games/magic-the-gathering/secrets-of-strixhaven",
+  "selectors_tested": [],
+  "cards_found_by_selector": {
+    "[class*='product-line']": 1,
+    "[class*='product']": 1,
+    "[class*='card']": 90,
+    "[class*='listing']": 60
+  },
+  "page_structure": {},
+  "errors": [
+    "Page.evaluate: TypeError: el.className.split is not a function\n    at eval (eval at evaluate (:290:30), <anonymous>:24:38)\n    at NodeList.forEach (<anonymous>)\n    at eval (eval at evaluate (:290:30), <anonymous>:23:58)\n    at UtilityScript.evaluate (<anonymous>:297:18)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+  ]
+}

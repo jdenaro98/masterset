@@ -1,0 +1,101 @@
+{
+  "url": "https://www.tcgplayer.com/search/all/product?view=grid",
+  "total_found": 19,
+  "product_lines": [
+    {
+      "name": "Latest Sets",
+      "url": "/categories/trading-and-collectible-card-games/magic-the-gathering",
+      "gameSlug": "magic-the-gathering"
+    },
+    {
+      "name": "Latest Sets",
+      "url": "/categories/trading-and-collectible-card-games/yugioh",
+      "gameSlug": "yugioh"
+    },
+    {
+      "name": "Latest English Sets",
+      "url": "/categories/trading-and-collectible-card-games/pokemon",
+      "gameSlug": "pokemon"
+    },
+    {
+      "name": "Latest Japanese Sets",
+      "url": "/categories/trading-and-collectible-card-games/pokemon-japan",
+      "gameSlug": "pokemon-japan"
+    },
+    {
+      "name": "Japanese Price Guide",
+      "url": "https://www.tcgplayer.com/categories/trading-and-collectible-card-games/pokemon-japan/price-guides",
+      "gameSlug": "categories"
+    },
+    {
+      "name": "Latest Sets",
+      "url": "/categories/trading-and-collectible-card-games/disney-lorcana",
+      "gameSlug": "disney-lorcana"
+    },
+    {
+      "name": "Latest Sets",
+      "url": "/categories/trading-and-collectible-card-games/one-piece-card-game",
+      "gameSlug": "one-piece-card-game"
+    },
+    {
+      "name": "Latest Sets",
+      "url": "/categories/trading-and-collectible-card-games/digimon-card-game",
+      "gameSlug": "digimon-card-game"
+    },
+    {
+      "name": "Gundam Card Game",
+      "url": "/categories/trading-and-collectible-card-games/gundam-card-game",
+      "gameSlug": "gundam-card-game"
+    },
+    {
+      "name": "Godzilla Card Game",
+      "url": "/categories/trading-and-collectible-card-games/godzilla-card-game",
+      "gameSlug": "godzilla-card-game"
+    },
+    {
+      "name": "hololive OFFICIAL CARD GAME",
+      "url": "/categories/trading-and-collectible-card-games/hololive-official-card-game",
+      "gameSlug": "hololive-official-card-game"
+    },
+    {
+      "name": "Magic: The Gathering",
+      "url": "/categories/trading-and-collectible-card-games/magic-the-gathering?scrollToTop=true",
+      "gameSlug": "magic-the-gathering?scrollToTop=true"
+    },
+    {
+      "name": "Yu-Gi-Oh!",
+      "url": "/categories/trading-and-collectible-card-games/yugioh?scrollToTop=true",
+      "gameSlug": "yugioh?scrollToTop=true"
+    },
+    {
+      "name": "Pok\u00e9mon",
+      "url": "/categories/trading-and-collectible-card-games/pokemon?scrollToTop=true",
+      "gameSlug": "pokemon?scrollToTop=true"
+    },
+    {
+      "name": "Disney Lorcana",
+      "url": "/categories/trading-and-collectible-card-games/disney-lorcana?scrollToTop=true",
+      "gameSlug": "disney-lorcana?scrollToTop=true"
+    },
+    {
+      "name": "One Piece Card Game",
+      "url": "/categories/trading-and-collectible-card-games/one-piece-card-game?scrollToTop=true",
+      "gameSlug": "one-piece-card-game?scrollToTop=true"
+    },
+    {
+      "name": "Digimon Card Game",
+      "url": "/categories/trading-and-collectible-card-games/digimon-card-game?scrollToTop=true",
+      "gameSlug": "digimon-card-game?scrollToTop=true"
+    },
+    {
+      "name": "Star Wars: Unlimited",
+      "url": "/categories/trading-and-collectible-card-games/star-wars-unlimited?scrollToTop=true",
+      "gameSlug": "star-wars-unlimited?scrollToTop=true"
+    },
+    {
+      "name": "Flesh and Blood",
+      "url": "/categories/trading-and-collectible-card-games/flesh-and-blood-tcg?scrollToTop=true",
+      "gameSlug": "flesh-and-blood-tcg?scrollToTop=true"
+    }
+  ]
+}

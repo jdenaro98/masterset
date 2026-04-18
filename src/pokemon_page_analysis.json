@@ -1,0 +1,4550 @@
+{
+  "status": "success",
+  "page_url": "https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&page=1",
+  "sets": [],
+  "sets_structure": [],
+  "errors": [],
+  "screenshot": "pokemon_sets_page.png",
+  "analysis": {
+    "page_title": "TCGplayer: Shop Pokemon Cards, Packs, Booster Boxes",
+    "sets": [
+      {
+        "text": "Latest Sets",
+        "href": "/categories/trading-and-collectible-card-games/magic-the-gathering"
+      },
+      {
+        "text": "Latest Sets",
+        "href": "/categories/trading-and-collectible-card-games/yugioh"
+      },
+      {
+        "text": "Legendary Modern Decks 2026",
+        "href": "/categories/trading-and-collectible-card-games/yugioh/legendary-modern-decks-2026"
+      },
+      {
+        "text": "2025 Mega-Pack",
+        "href": "/categories/trading-and-collectible-card-games/yugioh/2025-mega-pack"
+      },
+      {
+        "text": "Retro Pack 2 (2020 Date Reprint)",
+        "href": "/categories/trading-and-collectible-card-games/yugioh/retro-pack-2-2020-date-reprint"
+      },
+      {
+        "text": "Latest English Sets",
+        "href": "/categories/trading-and-collectible-card-games/pokemon"
+      },
+      {
+        "text": "Latest Japanese Sets",
+        "href": "/categories/trading-and-collectible-card-games/pokemon-japan"
+      },
+      {
+        "text": "Latest Sets",
+        "href": "/categories/trading-and-collectible-card-games/disney-lorcana"
+      },
+      {
+        "text": "Latest Sets",
+        "href": "/categories/trading-and-collectible-card-games/one-piece-card-game"
+      },
+      {
+        "text": "Latest Sets",
+        "href": "/categories/trading-and-collectible-card-games/digimon-card-game"
+      },
+      {
+        "text": "Osprey Books",
+        "href": "/search/books/osprey-books?setName=osprey-books&productLineName=books&page=1"
+      },
+      {
+        "text": "ME03: Perfect OrderUncommon, #081/088Poke Pad - 081/0881586 listings from $0.55Market Price:$0.47",
+        "href": "/product/684332/pokemon-me03-perfect-order-poke-pad-081-088?page=1"
+      },
+      {
+        "text": "ME03: Perfect OrderRare, #050/088Gengar1064 listings from $0.51Market Price:$0.64",
+        "href": "/product/684431/pokemon-me03-perfect-order-gengar?page=1"
+      },
+      {
+        "text": "ME02: Phantasmal FlamesUncommon, #087/094Dawn2843 listings from $0.14Market Price:$0.24",
+        "href": "/product/660414/pokemon-me02-phantasmal-flames-dawn?page=1"
+      },
+      {
+        "text": "ME03: Perfect OrderRare, #087/088Rocky Fighting Energy1835 listings from $0.01Market Price:$0.21",
+        "href": "/product/684350/pokemon-me03-perfect-order-rocky-fighting-energy?page=1"
+      },
+      {
+        "text": "ME: Ascended HeroesCommon, #196/217Night Stretcher1076 listings from $0.25Market Price:$0.32",
+        "href": "/product/676008/pokemon-me-ascended-heroes-night-stretcher?page=1"
+      },
+      {
+        "text": "ME: Ascended HeroesCommon, #198/217Poke Pad1204 listings from $0.70Market Price:$0.87",
+        "href": "/product/676010/pokemon-me-ascended-heroes-poke-pad?page=1"
+      },
+      {
+        "text": "ME: Mega Evolution PromoPromo, #031N's Zekrom - 031244 listings from $8.99Market Price:$9.13",
+        "href": "/product/680480/pokemon-me-mega-evolution-promo-ns-zekrom-031?page=1"
+      },
+      {
+        "text": "ME01: Mega EvolutionCommon, #131/132Ultra Ball1872 listings from $0.17Market Price:$0.21",
+        "href": "/product/654470/pokemon-me01-mega-evolution-ultra-ball?page=1"
+      },
+      {
+        "text": "ME03: Perfect OrderRare, #086/088Growing Grass Energy2071 listings from $0.01Market Price:$0.23",
+        "href": "/product/684375/pokemon-me03-perfect-order-growing-grass-energy?page=1"
+      }
+    ],
+    "filters": [
+      {
+        "tag": "DIV",
+        "class": "shipping-filter-popover selector-left-search",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": ""
+      },
+      {
+        "tag": "LABEL",
+        "class": "search-filter__label",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets scrollable",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "A",
+        "class": "search-filter__facet filter-item enabled",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "horizontal-filters-bar",
+        "text": "All Filters\n1\nCondition\nPrinting\nPokemon\nSet\nProduct Type\nCard Type\nRarity\nClear Filters"
+      },
+      {
+        "tag": "DIV",
+        "class": "horizontal-filters-bar__filters",
+        "text": "All Filters\n1\nCondition\nPrinting\nPokemon\nSet\nProduct Type\nCard Type\nRarity\nClear Filters"
+      },
+      {
+        "tag": "DIV",
+        "class": "horizontal-filters-bar__filters__filters-button",
+        "text": "All Filters\n1"
+      },
+      {
+        "tag": "BUTTON",
+        "class": "tcg-button tcg-button--md tcg-standard-button tcg-standard-button--default button--toggle-filters",
+        "text": "All Filters\n1"
+      },
+      {
+        "tag": "SPAN",
+        "class": "tcg-badge--default tcg-badge--lg tcg-badge--color-brand is-inline tcg-badge filter-count button-badg",
+        "text": "1"
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "hfb-popover__button__filter-count",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "horizontal-filters-bar__right",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "horizontal-filters-bar__right__sorting is-search",
+        "text": ""
+      },
+      {
+        "tag": "DIV",
+        "class": "filter-bubbles",
+        "text": " Applied Filters Reset FiltersPokemon"
+      },
+      {
+        "tag": "SECTION",
+        "class": "filter-bubbles__header",
+        "text": " Applied Filters Reset Filters"
+      },
+      {
+        "tag": "H2",
+        "class": "filter-bubbles__title",
+        "text": " Applied Filters "
+      },
+      {
+        "tag": "SPAN",
+        "class": "filter-bubbles__clear",
+        "text": "Reset Filters"
+      },
+      {
+        "tag": "DIV",
+        "class": "filter-bubbles__wrapper",
+        "text": "Pokemon"
+      },
+      {
+        "tag": "BUTTON",
+        "class": "tcg-chip tcg-chip--md is-dismissable is-active filter-bubbles__bubble",
+        "text": "Pokemon"
+      },
+      {
+        "tag": "DIV",
+        "class": "availability-filter",
+        "text": "Hide Out of StockSellers With At Least\u2026"
+      },
+      {
+        "tag": "DIV",
+        "class": "tcg-input-checkbox--center tcg-input-checkbox availability-filter__option",
+        "text": "Hide Out of Stock"
+      },
+      {
+        "tag": "SPAN",
+        "class": "availability-filter__option-value",
+        "text": "Hide Out of Stock"
+      },
+      {
+        "tag": "DIV",
+        "class": "tcg-input-checkbox--center tcg-input-checkbox availability-filter__option",
+        "text": "Sellers With At Least\u2026"
+      },
+      {
+        "tag": "SPAN",
+        "class": "availability-filter__option-value",
+        "text": "Sellers With At Least\u2026"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "PrintingNormal16106Reverse Holofoil14560Holofoil7182"
+      },
+      {
+        "tag": "H2",
+        "class": "search-filter__title",
+        "text": "Printing"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets",
+        "text": "Normal16106Reverse Holofoil14560Holofoil7182"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Normal16106Reverse Holofoil14560Holofoil7182"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Normal16106"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "16106"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Reverse Holofoil14560"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "14560"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Holofoil7182"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "7182"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "ConditionNear Mint34726Lightly Played2709Moderately Played100Heavily Played14Damaged232Unopened67"
+      },
+      {
+        "tag": "H2",
+        "class": "search-filter__title",
+        "text": "Condition"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets",
+        "text": "Near Mint34726Lightly Played2709Moderately Played100Heavily Played14Damaged232Unopened67"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Near Mint34726Lightly Played2709Moderately Played100Heavily Played14Damaged232Unopened67"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Near Mint34726"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "34726"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Lightly Played2709"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2709"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Moderately Played100"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "100"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Heavily Played14"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "14"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Damaged232"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "232"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Unopened67"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "67"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "LanguageEnglish37848"
+      },
+      {
+        "tag": "H2",
+        "class": "search-filter__title",
+        "text": "Language"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets",
+        "text": "English37848"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "English37848"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "English37848"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "37848"
+      },
+      {
+        "tag": "LABEL",
+        "class": "search-filter__label",
+        "text": "Product Line"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "31821"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "113989"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "46582"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "29819"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "29787"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "25142"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "13716"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "11633"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "9972"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "9506"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "8923"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "8278"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "8117"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "7763"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6973"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6743"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6382"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6279"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "5889"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "5626"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "5471"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4735"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4708"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4670"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4303"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3759"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3455"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3208"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3171"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2974"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2723"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2348"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2285"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2267"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1955"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1947"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1934"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1933"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1820"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1650"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1405"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1398"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1366"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1273"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1184"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1184"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1165"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1000"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "976"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "896"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "854"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "766"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "733"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "709"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "699"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "686"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "603"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "135"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "107"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "94"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "72"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "38"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "38"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "14"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "10"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1"
+      },
+      {
+        "tag": "LABEL",
+        "class": "search-filter__label",
+        "text": "Set"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "World Championship Decks1986"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1986"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Miscellaneous Cards & Products1473"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1473"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Prize Pack Series Cards723"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "723"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "League & Championship Cards617"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "617"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME: Ascended Heroes609"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "609"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Deck Exclusives489"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "489"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Prismatic Evolutions399"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "399"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Black Bolt358"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "358"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH: Sword & Shield Promo Cards343"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "343"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: White Flare342"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "342"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM Promos333"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "333"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH08: Fusion Strike330"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "330"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Jumbo Cards328"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "328"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV02: Paldea Evolved315"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "315"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV04: Paradox Rift307"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "307"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV01: Scarlet & Violet Base Set304"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "304"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Cosmic Eclipse301"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "301"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Unified Minds298"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "298"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Paldean Fates293"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "293"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH01: Sword & Shield Base Set289"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "289"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH07: Evolving Skies288"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "288"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV08: Surging Sparks288"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "288"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Scarlet & Violet Promo Cards283"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "283"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV10: Destined Rivals281"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "281"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH06: Chilling Reign275"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "275"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH11: Lost Origin273"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "273"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Lost Thunder271"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "271"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Unbroken Bonds271"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "271"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Promos269"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "269"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV06: Twilight Masquerade262"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "262"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV03: Obsidian Flames262"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "262"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV05: Temporal Forces260"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "260"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH02: Rebel Clash254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH10: Astral Radiance254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH12: Silver Tempest254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "254"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Scarlet & Violet 151247"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "247"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH04: Vivid Voltage247"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "247"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Team Up245"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "245"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH03: Darkness Ablaze243"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "243"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Guardians Rising241"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "241"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH09: Brilliant Stars234"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "234"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH05: Battle Styles232"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "232"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME01: Mega Evolution228"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "228"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - BREAKthrough227"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "227"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV09: Journey Together225"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "225"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Crown Zenith224"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "224"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Celestial Storm222"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "222"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Burning Shadows214"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "214"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Ultra Prism211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM Base Set211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV07: Stellar Crown211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "211"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Base Set197"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "197"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Primal Clash196"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "196"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Aquapolis187"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "187"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Skyridge185"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "185"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Forbidden Light178"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "178"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Evolutions176"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "176"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Expedition168"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "168"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Fates Collide167"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "167"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM - Crimson Invasion161"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "161"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Boundaries Crossed160"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "160"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Steam Siege158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Furious Fists158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME02: Phantasmal Flames158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "158"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Supreme Victors156"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "156"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Phantom Forces156"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "156"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - BREAKpoint155"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "155"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME03: Perfect Order154"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "154"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Unseen Forces149"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "149"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Black and White Promos148"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "148"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Legends Awakened148"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "148"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Flashfire147"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "147"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Plasma Storm146"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "146"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Pokemon GO145"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "145"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Roaring Skies144"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "144"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Platinum141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Battle Academy 2022141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Gym Challenge140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Battle Academy 2024140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Battle Academy140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Gym Heroes140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "140"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Base Set 2137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SV: Shrouded Fable137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Diamond and Pearl135"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "135"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Secret Wonders134"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "134"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY - Ancient Origins134"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "134"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Black and White133"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "133"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragons Exalted131"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "131"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Blister Exclusives130"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "130"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Mysterious Treasures128"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "128"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Plasma Freeze128"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "128"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "HeartGold SoulSilver126"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "126"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shining Fates: Shiny Vault122"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "122"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rising Rivals122"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "122"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Emerging Powers121"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "121"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Arceus120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Next Destinies120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "FireRed & LeafGreen120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Generations119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Neo Destiny119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Noble Victories119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Legendary Treasures119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "119"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Delta Species118"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "118"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dark Explorers117"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "117"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Neo Genesis117"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "117"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shining Fates116"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "116"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Plasma Blast115"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "115"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Holon Phantoms115"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "115"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Team Rocket Returns113"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "113"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Legendary Collection113"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "113"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Deoxys112"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "112"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Ruby and Sapphire112"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "112"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Base Set (Shadowless)111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Power Keepers111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Emerald111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "111"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Champion's Path110"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "110"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Base Set109"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "109"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Call of Legends109"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "109"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Stormfront108"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "108"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Great Encounters108"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "108"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Hidden Legends107"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "107"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Triumphant106"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "106"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragon Frontiers104"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "104"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Majestic Dawn104"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "104"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Sandstorm103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Trading Card Game Classic103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Crystal Guardians103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragon103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "103"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Team Magma vs Team Aqua102"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "102"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shining Legends101"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "101"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Unleashed98"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "98"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Hidden Fates96"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "96"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Nintendo Promos95"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "95"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Legend Maker95"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "95"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Hidden Fates: Shiny Vault94"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "94"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Undaunted93"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "93"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragon Majesty91"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "91"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Team Rocket89"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "89"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Neo Discovery80"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "80"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Celebrations74"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "74"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "WoTC Promo71"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "71"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Jungle70"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "70"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Crown Zenith: Galarian Gallery70"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "70"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Neo Revelation69"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "69"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Fossil68"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "68"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME: Mega Evolution Promo67"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "67"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Diamond and Pearl Promos66"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "66"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Trainer Kit: Bisharp & Wigglytuff62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Trainer Kit: Sylveon & Noivern62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM Trainer Kit: Alolan Sandslash & Alolan Ninetales62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Trainer Kit: Latias & Latios62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "XY Trainer Kit: Pikachu Libre & Suicune62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "62"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "HGSS Trainer Kit: Gyarados & Raichu61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SM Trainer Kit: Lycanroc & Alolan Raichu61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "BW Trainer Kit: Excadrill & Zoroark61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Alternate Art Promos57"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "57"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "EX Battle Stadium52"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "52"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Professor Program Promos51"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "51"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Kalos Starter Set50"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "50"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "My First Battle50"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "50"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SVE: Scarlet & Violet Energies40"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "40"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Detective Pikachu39"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "39"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "HGSS Promos38"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "38"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Double Crisis37"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "37"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Trick or Trade BOOster Bundle 202435"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "35"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Trick or Trade BOOster Bundle 202334"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "34"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "First Partner Pack33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Trick or Trade BOOster Bundle33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Generations: Radiant Collection32"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "32"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH10: Astral Radiance Trainer Gallery30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH11: Lost Origin Trainer Gallery30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH09: Brilliant Stars Trainer Gallery30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "SWSH12: Silver Tempest Trainer Gallery30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "30"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's 25th Anniversary Promos26"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "26"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Legendary Treasures: Radiant Collection25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Celebrations: Classic Collection25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "EX Trainer Kit 2: Plusle & Minun25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "25"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragon Vault24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "DP Trainer Kit: Manaphy & Lucario24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Burger King Promos24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Countdown Calendar Promos24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "24"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Pikachu World Collection Promos21"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "21"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "EX Trainer Kit 1: Latias & Latios21"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "21"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "20"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Southern Islands19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 219"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 619"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 319"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 819"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "19"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 918"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 418"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 718"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ME04: Chaos Rising18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "POP Series 518"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "18"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 202316"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "16"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 202416"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "16"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rumble16"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "16"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 202216"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "16"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Best of Promos15"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "15"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201612"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201112"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201712"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201212"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201512"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201812"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201412"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "McDonald's Promos 201912"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "MEE: Mega Evolution Energies8"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "8"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Kids WB Promos6"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "First Partner Collection 20265"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "5"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Player Placement Trainer Promos4"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "e-Reader Sample Cards1"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "Product TypeCards29058Sealed Products2763"
+      },
+      {
+        "tag": "H2",
+        "class": "search-filter__title",
+        "text": "Product Type"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets",
+        "text": "Cards29058Sealed Products2763"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Cards29058Sealed Products2763"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Cards29058"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "29058"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Sealed Products2763"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2763"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "Card TypePokemon23143Supporter1912Item1608Energy1244Stadium464Trainer413Tool322"
+      },
+      {
+        "tag": "H2",
+        "class": "search-filter__title",
+        "text": "Card Type"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets",
+        "text": "Pokemon23143Supporter1912Item1608Energy1244Stadium464Trainer413Tool322"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Pokemon23143Supporter1912Item1608Energy1244Stadium464Trainer413Tool322"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Pokemon23143"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "23143"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Supporter1912"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1912"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Item1608"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1608"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Energy1244"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1244"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Stadium464"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "464"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Trainer413"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "413"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Tool322"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "322"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "Energy TypeEnergy TypeWater3005Psychic2986Grass2796Colorless2666Fighting2295Lightning2019Fire2014Darkness1504Metal1141Dragon704Fairy285Energy137"
+      },
+      {
+        "tag": "LABEL",
+        "class": "search-filter__label",
+        "text": "Energy Type"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets scrollable",
+        "text": "Water3005Psychic2986Grass2796Colorless2666Fighting2295Lightning2019Fire2014Darkness1504Metal1141Dragon704Fairy285Energy137"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Water3005Psychic2986Grass2796Colorless2666Fighting2295Lightning2019Fire2014Darkness1504Metal1141Dragon704Fairy285Energy137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Water3005"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3005"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Psychic2986"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2986"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Grass2796"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2796"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Colorless2666"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2666"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Fighting2295"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2295"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Lightning2019"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2019"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Fire2014"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2014"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Darkness1504"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1504"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Metal1141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1141"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Dragon704"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "704"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Fairy285"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "285"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Energy137"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "137"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter",
+        "text": "RarityRarityCommon6945Uncommon6561Promo3827Rare3443Ultra Rare2512Holo Rare1900Code Card1225Secret Rare601Double Rare479Illustration Rare477Shiny Holo Rare246Special Illustration Rare210Classic Collect"
+      },
+      {
+        "tag": "LABEL",
+        "class": "search-filter__label",
+        "text": "Rarity"
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets scrollable",
+        "text": "Common6945Uncommon6561Promo3827Rare3443Ultra Rare2512Holo Rare1900Code Card1225Secret Rare601Double Rare479Illustration Rare477Shiny Holo Rare246Special Illustration Rare210Classic Collection129Shiny "
+      },
+      {
+        "tag": "DIV",
+        "class": "search-filter__facets__container",
+        "text": "Common6945Uncommon6561Promo3827Rare3443Ultra Rare2512Holo Rare1900Code Card1225Secret Rare601Double Rare479Illustration Rare477Shiny Holo Rare246Special Illustration Rare210Classic Collection129Shiny "
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Common6945"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6945"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Uncommon6561"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6561"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Promo3827"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3827"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rare3443"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "3443"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Ultra Rare2512"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "2512"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Holo Rare1900"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1900"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Code Card1225"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "1225"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Secret Rare601"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "601"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Double Rare479"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "479"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Illustration Rare477"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "477"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shiny Holo Rare246"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "246"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Special Illustration Rare210"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "210"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Classic Collection129"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "129"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shiny Rare120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "120"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Hyper Rare74"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "74"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Unconfirmed66"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "66"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "ACE SPEC Rare61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "61"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rainbow Rare36"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "36"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Prism Rare33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Radiant Rare33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "33"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rare BREAK28"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "28"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Rare Ace14"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "14"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Shiny Ultra Rare12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "12"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Amazing Rare9"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "9"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Mega Attack Rare7"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "7"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Mega Hyper Rare6"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "6"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__facet filter-item enabled",
+        "text": "Black White Rare4"
+      },
+      {
+        "tag": "SPAN",
+        "class": "search-filter__option-count",
+        "text": "4"
+      },
+      {
+        "tag": "DIV",
+        "class": "filter-drawer-footer",
+        "text": " Save  Clear All "
+      },
+      {
+        "tag": "BUTTON",
+        "class": "tcg-button tcg-button--md tcg-standard-button tcg-standard-button--priority filter-drawer-footer__bu",
+        "text": " Save "
+      },
+      {
+        "tag": "BUTTON",
+        "class": "tcg-button tcg-button--md tcg-standard-button tcg-standard-button--grayscale-light filter-drawer-foo",
+        "text": " Clear All "
+      }
+    ],
+    "products": [],
+    "sidebar_elements": [],
+    "language_filter": null,
+    "pagination": "1\n2\n3\n4\n5\n...\n200"
+  },
+  "html_saved": "pokemon_sets_page.html"
+}

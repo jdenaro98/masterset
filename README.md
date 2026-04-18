@@ -1,192 +1,159 @@
-# VSTAR Universe (S12a) TCGPlayer Cart Optimizer
+# TCGPlayer Web Scraper
 
-Automatically scrapes every seller listing across all 344 target cards
-in the Japanese VSTAR Universe set and finds the **minimum number of
-sellers** you need to buy from — then shows you the cheapest option
-within that constraint.
+A Python CLI tool for scraping card game price data from TCGPlayer using Playwright for web automation.
 
----
+## Project Structure
 
-## Prerequisites
+```
+pokescraper/
+├── src/
+│   ├── main.py              # CLI entry point
+│   ├── scraper.py           # Playwright scraper logic
+│   ├── cli.py               # CLI interface and user interaction
+│   ├── config.py            # Configuration constants
+│   ├── inspector.py         # Utilities for inspecting the website
+│   ├── inspector_game_page.py
+│   ├── inspector_sets.py
+│   └── inspector_price_guide.py
+├── data/                    # Output JSON files
+├── logs/                    # Log files
+└── requirements.txt         # Python dependencies
+```
 
-| Requirement | Minimum version |
-|---|---|
-| Python | 3.11+ |
-| pip | any recent version |
+## Quick Start
 
----
+### Option 1: Windows Batch File (Easiest) 🚀
+Double-click `run_pokescraper.bat` - it handles everything automatically:
+- Creates virtual environment (if needed)
+- Installs dependencies
+- Launches the CLI
 
-## One-Time Setup
+### Option 2: PowerShell
+```powershell
+# Navigate to pokescraper directory
+cd C:\Users\jape1\Desktop\Git\pokescraper
 
-### 1 — Install Python dependencies
+# Run the script
+.\run_pokescraper.ps1
 
+# Optional: reset virtual environment
+.\run_pokescraper.ps1 -Reset
+```
+
+### Option 3: Manual Setup (Any Platform)
 ```bash
+# Navigate to project directory
+cd pokescraper
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate it
+# Windows:
+.\.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the scraper
+python src/main.py
 ```
 
-### 2 — Install the Playwright browser binary
+## Features
 
-```bash
-playwright install chromium
+### Implemented ✅
+- [x] Scrape TCGPlayer game list from navbar (75 games)
+- [x] Present user with numbered game selection
+- [x] Handle Pokemon language selection (English/Japanese)
+- [x] Scrape sets for chosen game/language (100+ sets per game)
+- [x] Present user with numbered set selection
+- [x] Navigate to price guide and collect card data with pagination
+- [x] **Seller extraction** - Extract 20-30+ sellers per card with:
+  - [x] Seller name and reputation
+  - [x] Sales count
+  - [x] Card condition
+  - [x] Price (numeric)
+  - [x] Shipping cost (numeric or 0 for included)
+- [x] **Seller pagination** - Click "View X Other Listings" modal to get all sellers
+- [x] JSON output with proper structure
+- [x] Comprehensive logging
+
+### Data Output
+
+Each card includes seller data:
+```json
+{
+  "name": "Card Name",
+  "url": "https://tcgplayer.com/product/...",
+  "sellers": [
+    {
+      "name": "Seller Name",
+      "reputation": "99.9%",
+      "sales": "9766",
+      "condition": "Near Mint",
+      "price": 20.5,
+      "shipping": 0
+    }
+  ]
+}
 ```
 
-This downloads a bundled Chromium (~150 MB).  You only need to do this once.
+### In Progress 🔄
+- [ ] Extract detailed seller data (prices, shipping, conditions) for each card
+- [ ] Handle pagination for seller listings per card
+- [ ] Handle multiple card forms (holo/reverse holo)
+- [ ] Output complete JSON with all seller information
 
----
+### Data Structure
 
-## Running the Script
+The output JSON will have the following format:
 
-```bash
-python vstar_optimizer.py
+```json
+{
+  "metadata": {
+    "set": "Set Name",
+    "scraped_at": "2026-04-17T12:34:56.789Z",
+    "total_cards": 150
+  },
+  "cards": {
+    "Card Name #001": {
+      "name": "Card Name #001",
+      "sellers": [
+        {
+          "seller_name": "Seller Name",
+          "price": 0.50,
+          "shipping": 0.10,
+          "condition": "Near Mint",
+          "quantity_available": 5
+        }
+      ],
+      "url": "link to card on TCGPlayer"
+    }
+  }
+}
 ```
 
-The script runs in three phases:
+## Usage
 
-| Phase | What it does | Output file |
-|---|---|---|
-| **1** | Paginates the TCGPlayer set search and collects every product URL + card number | `products.json` |
-| **2** | Visits each product page and scrapes all seller listings | `listings.json` |
-| **3** | Solves the set-cover optimisation and writes results | `optimized_cart.csv` + `summary.txt` |
+1. Run the program: `python src/main.py`
+2. Select a trading card game from the list
+3. If Pokemon, select English or Japanese
+4. Select a set from the available sets
+5. Wait for scraping to complete - data will be saved to `data/` folder
 
-### Progress is automatically saved
+## Architecture
 
-Phase 2 saves progress every 10 cards.  If the script is interrupted,
-re-running it will skip all already-scraped cards and continue from
-where it left off.  To **start completely fresh**, delete
-`products.json` and `listings.json`.
+- **CLI Module**: Handles all user interaction and menu displays
+- **Scraper Module**: Uses Playwright to navigate and extract data from TCGPlayer
+- **Config Module**: Stores configuration constants and selectors
+- **Inspector Modules**: Utilities for analyzing TCGPlayer's structure (for development)
 
----
+## Next Steps
 
-## Expected Run Time
-
-- **Phase 1**: 5–15 minutes (depends on how many pages TCGPlayer has for the set)
-- **Phase 2**: 4–8 hours (344 cards × ~4 seconds each + loading time per page)
-
-Run it overnight.  The browser window will be visible by default so
-you can see it working.
-
----
-
-## Output Files
-
-### `optimized_cart.csv`
-
-One row per card.  Columns:
-
-| Column | Description |
-|---|---|
-| `card_number` | Printed card number (e.g. `107`) |
-| `card_name` | Full TCGPlayer product name |
-| `variant` | Normal, Holofoil, etc. |
-| `seller` | TCGPlayer seller username |
-| `price_usd` | Card price from that seller |
-| `shipping_usd` | Shipping charge (FREE if $0) |
-| `condition` | Near Mint / Lightly Played |
-| `tcgplayer_url` | Direct link to the product page |
-
-### `summary.txt`
-
-Human-readable summary printed to your terminal and saved to disk:
-
-```
-===================================================================
-  VSTAR UNIVERSE (S12a)  –  OPTIMISED CART SUMMARY
-===================================================================
-  Cards to purchase   : 344
-  Unique sellers      : 12
-  Total card cost     : $347.82
-  Total shipping      : $48.00
-  Estimated grand total: $395.82
-
-  PER-SELLER BREAKDOWN  (sorted by cards held descending)
-  ------------------------------------------------------------------
-  Seller                            Cards  Card $    Ship   Subtotal
-  ------------------------------------------------------------------
-  BestDealsCards                       87  $82.43   $4.00    $86.43
-  ...
-```
-
----
-
-## Configuration
-
-Edit the block at the top of `vstar_optimizer.py`:
-
-```python
-# Card numbers to skip
-EXCLUDED_CARD_NUMBERS = {"205", "212", "221", "259", "261", "262", "263"}
-
-# Only consider Near Mint and Lightly Played copies
-ACCEPTED_CONDITIONS = ("near mint", "lightly played")
-
-# True = invisible browser, False = visible (default, less likely to be blocked)
-HEADLESS = False
-
-# Seconds between page loads (increase if you keep getting blocked)
-MIN_DELAY = 2.5
-MAX_DELAY = 5.0
-```
-
----
-
-## Troubleshooting
-
-### "No products were discovered"
-TCGPlayer's page structure may have changed, or you may be rate-limited.
-Try increasing `MIN_DELAY` / `MAX_DELAY` and re-running.  If the set
-search page looks different in the browser, inspect the page source and
-update the selector logic in `discover_products()`.
-
-### Script is running but finding 0 listings for many cards
-TCGPlayer's DOM class names sometimes change between deploys.  The
-script tries **both** network interception (capturing the JSON responses
-the frontend fetches) and DOM scraping.  If both fail:
-1. Open one of the card URLs in a regular browser.
-2. Open DevTools → Network → filter for "listing" or "sellerlisting".
-3. Find the JSON response that contains seller data.
-4. Update `_parse_network_listings()` to match the new field names.
-
-### Getting CAPTCHAs or blocked
-- Increase `MIN_DELAY` and `MAX_DELAY` to 5–10 seconds.
-- Keep `HEADLESS = False` (visible browser is less detectable).
-- Try running it at a different time of day.
-- If a CAPTCHA appears, solve it manually in the browser window —
-  the script will wait for `networkidle` and then continue automatically.
-
-### "playwright: command not found"
-Make sure you installed into the right Python environment:
-```bash
-python -m playwright install chromium
-```
-
----
-
-## How the Optimisation Works
-
-The problem of choosing which sellers to buy from is a variant of the
-**weighted set cover** problem.  This is NP-hard in general, but the
-greedy algorithm produces solutions within a logarithmic factor of
-optimal and works well in practice for this size of problem.
-
-**Step 1 — Inventory**  
-For each seller, find the cheapest price they offer for each card.
-
-**Step 2 — Greedy set cover**  
-Repeatedly pick the seller who covers the most **still-uncovered**
-cards.  Ties are broken by lowest total cost for those cards.
-
-**Step 3 — Local search refinement**  
-After the greedy pass, scan for sellers who are now redundant (all
-their cards are also available from other already-chosen sellers) and
-remove them.  Also try swapping single-card sellers for alternatives.
-
-**Step 4 — Assignment**  
-For each card, assign it to whichever chosen seller offers it cheapest.
-
----
-
-## License
-
-Do whatever you want with this script.  Scraping publicly visible prices
-for personal use is generally fine, but be polite — don't remove the
-delays or hammer TCGPlayer's servers.
+1. Implement detailed seller data extraction per card
+2. Handle pagination for multiple seller pages per card
+3. Optimize scraping speed with parallel card processing
+4. Add error handling and retry logic for failed requests
+5. Add support for filtering cards by condition/rarity

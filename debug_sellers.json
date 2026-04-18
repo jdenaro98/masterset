@@ -1,0 +1,76 @@
+[
+  {
+    "name": "Wylder Gaming",
+    "reputation_percentage": "99.9%",
+    "sales": 9766,
+    "condition": "Near Mint",
+    "price": "$20.50",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "TenthDimensionCards",
+    "reputation_percentage": "100%",
+    "condition": "Near Mint",
+    "price": "$20.50",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Showcase Games",
+    "reputation_percentage": "99.9%",
+    "sales": 1838,
+    "condition": "Near Mint",
+    "price": "$19.20",
+    "shipping": "+ $1.31 Shipping"
+  },
+  {
+    "name": "Spa City CandC",
+    "reputation_percentage": "99.8%",
+    "condition": "Near Mint",
+    "price": "$20.00",
+    "shipping": "+ $0.99 Shipping"
+  },
+  {
+    "name": "Baltaks Cards",
+    "reputation_percentage": "100%",
+    "condition": "Near Mint",
+    "price": "$21.00",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "GGAZ_CCG",
+    "reputation_percentage": "100%",
+    "condition": "Near Mint",
+    "price": "$21.22",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Round 2 Gaming",
+    "reputation_percentage": "100%",
+    "sales": 7098,
+    "condition": "Near Mint",
+    "price": "$20.19",
+    "shipping": "+ $1.27 Shipping"
+  },
+  {
+    "name": "TopDeckKeep",
+    "reputation_percentage": "100%",
+    "condition": "Near Mint",
+    "price": "$20.33",
+    "shipping": "+ $1.31 Shipping"
+  },
+  {
+    "name": "Mox Valley Games",
+    "reputation_percentage": "99.9%",
+    "condition": "Near Mint",
+    "price": "$21.65",
+    "shipping": "Shipping: Included"
+  },
+  {
+    "name": "Tilted Gaming TCG",
+    "reputation_percentage": "99.9%",
+    "sales": 8719,
+    "condition": "Near Mint",
+    "price": "$21.65",
+    "shipping": "Shipping: Included"
+  }
+]
