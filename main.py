@@ -23,7 +23,6 @@ def main():
         stealth_config.apply_stealth_sync(page)
         page.goto(URL)
         page.wait_for_load_state("networkidle")
-        # page.screenshot(path="debug.png")
 
         # Searching for only the games list container
         games = page.locator(".site-map.grouping > .grouping").first
