@@ -1,6 +1,8 @@
 from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
 import questionary
+import re
+import time
 import sys, os
 
 def main():
@@ -168,16 +170,15 @@ def main():
     # Stage 6: Remake web browser, scrape data from card list, card urls
     # ======================================================================
     with sync_playwright() as pw:
-        card_names = []
-        card_urls = []
+        all_card_data = {}
         browser = pw.chromium.launch(headless=False, args=["--window-size=640,640"])
         page = browser.new_page()
         stealth_config = Stealth()
         stealth_config.apply_stealth_sync(page)
 
         # Need to add logic/loop here to handle various urls
-        for url in url_list:
-            C_URL = f"https://www.tcgplayer.com{url}"
+        for i in range(len(url_list)):
+            C_URL = f"https://www.tcgplayer.com{url_list[i]}"
             page.goto(C_URL)
             page.wait_for_load_state("networkidle")
             
@@ -188,15 +189,20 @@ def main():
             # Scrolling and selecting 'lightly played' which will also select 'near mint'
             # FUTURE: Add user input to decide what conditions they're ok with
 
-            # FIX!!: Not waiting after selecting LP to select NM, only getting one as a result
-            lp_filter = page.locator("#Condition-LightlyPlayed-filter")
+            # LP Filter Check
+            lp_filter = page.locator(".tcg-input-checkbox", has_text="Lightly Played")
             lp_filter.scroll_into_view_if_needed()
-            lp_filter.click(force=True)
-            expect(lp_filter).to_be_checked()
-            nm_filter = page.locator("#Condition-NearMint-filter")
+            page.locator("#Condition-LightlyPlayed-filter").click(force=True)
+            expect(lp_filter).to_have_class(re.compile(r"is-checked"))
+            time.sleep(0.5)
+            # NM Filter Check
+            nm_filter = page.locator(".tcg-input-checkbox", has_text="Near Mint")
             nm_filter.scroll_into_view_if_needed()
-            nm_filter.click(force=True)
-            expect(nm_filter).to_be_checked()
+            page.locator("#Condition-NearMint-filter").click(force=True)
+            expect(nm_filter).to_have_class(re.compile(r"is-checked"))
+            time.sleep(0.5)
+
+            # Save Filters
             page.locator(".filter-drawer-footer__button-save").click()
             page.wait_for_load_state("networkidle")
 
@@ -208,13 +214,43 @@ def main():
             trigger.click()
             page.get_by_role("option", name="50").click()
             page.wait_for_load_state("networkidle")
-            page.pause()
 
-            # Scraping and data export logic
+            # Call scraping logic
+            all_card_data[card_list[i]] = scrape_listings(page)
 
         browser.close()
 
+    print(all_card_data)
+
 ###############################################################################
+
+# Scrape from page
+def scrape_listings(page):
+    listings_data = []
+    # Identify all listing rows
+    listings = page.locator("section.listing-item")
+    
+    for i in range(listings.count()):
+        item = listings.nth(i)
+        
+        # Scrape raw strings
+        seller = item.locator(".seller-info__name").inner_text().strip()
+        condition = item.locator(".listing-item__listing-data__info__condition").inner_text().strip()
+        price = item.locator(".listing-item__listing-data__info__price").inner_text().strip()
+        raw_shipping = item.locator(".listing-item__listing-data__info span").inner_text().strip()
+        
+        # Handle "Included" vs numerical
+        shipping_clean = "$0.00" if "Included" in raw_shipping else \
+                         raw_shipping.replace("+", "").replace("Shipping", "").strip()
+            
+        # Add this seller's dict to the list
+        listings_data.append({
+            "seller": seller,
+            "condition": condition,
+            "price": price,
+            "shipping": shipping_clean
+        })
+    return listings_data
 
 # Function to display passed list and allow user to continue to add to it until 'done'
 def usr_card_input(card_names, prompt):
