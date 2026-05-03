@@ -1,12 +1,9 @@
 from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
-import questionary
-import re
-import time
-import sys, os
+import questionary, re, time, sys, os
+import optimizer
 
 def main():
-    # Step 1: Scrape Games List
     with sync_playwright() as pw:
         URL = "https://www.tcgplayer.com/categories"
         titles = []
@@ -21,7 +18,7 @@ def main():
         # ======================================================================
         # Stage 1: Navigate to Categories Page and collect Games list
         # ======================================================================
-        browser = pw.chromium.launch(headless=False, args=["--window-size=640,640"])
+        browser = pw.chromium.launch(headless=True, args=["--window-size=640,640"])
         page = browser.new_page()
         stealth_config = Stealth()
         stealth_config.apply_stealth_sync(page)
@@ -97,7 +94,7 @@ def main():
     with sync_playwright() as pw:
         card_names = []
         card_urls = []
-        browser = pw.chromium.launch(headless=False, args=["--window-size=640,640"])
+        browser = pw.chromium.launch(headless=True, args=["--window-size=640,640"])
         page = browser.new_page()
         stealth_config = Stealth()
         stealth_config.apply_stealth_sync(page)
@@ -113,7 +110,7 @@ def main():
         product_links = page.locator("tbody.tcg-table-body a.pdp-url")
         for i in range(product_links.count()):
             link = product_links.nth(i)
-            card_names.append(link.inner_text())
+            card_names.append(link.inner_text().strip())
             # titles.sort() # unnecessary for now
             card_urls.append(link.get_attribute("href"))
             # print(data)   # Debug
@@ -159,7 +156,8 @@ def main():
             url_list.pop(i)
     # Basically do nothing beceause user wants whole list    
     else:
-        pass
+        card_list = card_names
+        url_list = card_urls
 
     # Final display, need to add option to restart back at the card choosing
     print("Your final card list looks like:")
@@ -182,29 +180,57 @@ def main():
             page.goto(C_URL)
             page.wait_for_load_state("networkidle")
             
+            # A survey may appear; dismiss if present
+            try:
+                dismiss_survey(page)
+            except Exception:
+                pass
+
             page.get_by_test_id("showFilters").click()
             drawer = page.locator(".tcg-drawer__sheet")
             drawer.wait_for(state="visible")        
             
+            # After showing filters, a survey may appear; dismiss if present
+            try:
+                dismiss_survey(page)
+            except Exception:
+                pass
+
             # Scrolling and selecting 'lightly played' which will also select 'near mint'
             # FUTURE: Add user input to decide what conditions they're ok with
 
-            # LP Filter Check
+            # LP Filter Check (only if it exists)
             lp_filter = page.locator(".tcg-input-checkbox", has_text="Lightly Played")
-            lp_filter.scroll_into_view_if_needed()
-            page.locator("#Condition-LightlyPlayed-filter").click(force=True)
-            expect(lp_filter).to_have_class(re.compile(r"is-checked"))
-            time.sleep(0.5)
-            # NM Filter Check
+            if lp_filter.count() > 0:
+                lp_filter.scroll_into_view_if_needed()
+                page.locator("#Condition-LightlyPlayed-filter").click(force=True)
+                expect(lp_filter).to_have_class(re.compile(r"is-checked"))
+                time.sleep(0.5)
+
+                # After checking one filter, a survey may appear; dismiss if present
+                try:
+                    dismiss_survey(page)
+                except Exception:
+                    pass
+
+            # NM Filter Check (only if it exists)
             nm_filter = page.locator(".tcg-input-checkbox", has_text="Near Mint")
-            nm_filter.scroll_into_view_if_needed()
-            page.locator("#Condition-NearMint-filter").click(force=True)
-            expect(nm_filter).to_have_class(re.compile(r"is-checked"))
-            time.sleep(0.5)
+            if nm_filter.count() > 0:
+                nm_filter.scroll_into_view_if_needed()
+                page.locator("#Condition-NearMint-filter").click(force=True)
+                expect(nm_filter).to_have_class(re.compile(r"is-checked"))
+                time.sleep(0.5)
+
+            # After saving filters a survey may appear; dismiss if present
+            try:
+                dismiss_survey(page)
+            except Exception:
+                pass
 
             # Save Filters
             page.locator(".filter-drawer-footer__button-save").click()
             page.wait_for_load_state("networkidle")
+
 
             # Load 50 per page (max allowed)
             dropdown_container = page.locator(".tcg-input-field", has_text="Listings / Page")
@@ -215,23 +241,58 @@ def main():
             page.get_by_role("option", name="50").click()
             page.wait_for_load_state("networkidle")
 
+
+            # ======================================================================
+            # Stage 6: Add all seller data to nested list/dict structure for each card
+            # ======================================================================
             # Call scraping logic
-            all_card_data[card_list[i]] = scrape_listings(page)
+            all_card_data[card_list[i]] = scrape_listings(page, game_rq)
 
         browser.close()
 
-    print(all_card_data)
+# Debug print of all scraped data, can be removed later
+    print("Scraped listings:")
+    for card, listings in all_card_data.items():
+        print(card)
+        if not listings:
+            print("  (no listings)")
+        else:
+            for s in listings:
+                seller = s.get("seller", "")
+                condition = s.get("condition", "")
+                price = s.get("price", "")
+                shipping = s.get("shipping", "")
+                total = s.get("total", "")
+                print(f"  - {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
+        print("")
+
+    optimizer.optimize(all_card_data)
 
 ###############################################################################
 
 # Scrape from page
-def scrape_listings(page):
+def scrape_listings(page, game):
     listings_data = []
     # Identify all listing rows
     listings = page.locator("section.listing-item")
-    
+
+    # Wait briefly for listings to appear (some pages load dynamically)
+    try:
+        page.wait_for_selector("section.listing-item", timeout=5000)
+    except Exception:
+        return listings_data
+
     for i in range(listings.count()):
         item = listings.nth(i)
+        
+        # Skip non-English/Japanese listings for Pokemon sets by checking the listing title
+        if game == "Pokemon Japan" or game == "Pokemon":
+            title_locator = item.locator(".listing-item__listing-data__listo__title")
+            if title_locator.count() > 0:
+                title = title_locator.first.text_content(timeout=1000) or ""
+                if re.search(r'(Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
+                    print("Skipping non-English/Japanese listing")
+                    continue
         
         # Scrape raw strings
         seller = item.locator(".seller-info__name").inner_text().strip()
@@ -247,10 +308,85 @@ def scrape_listings(page):
         listings_data.append({
             "seller": seller,
             "condition": condition,
-            "price": price,
-            "shipping": shipping_clean
+            "price": parse_money(price),
+            "shipping": parse_money(shipping_clean),
+            "total": parse_money(price) + parse_money(shipping_clean)
         })
     return listings_data
+
+
+def parse_money(s):
+    return round(float(re.sub(r'[^0-9.]', '', s) or 0), 2)
+
+# Dismiss survey overlay (e.g., QSI web survey) if it appears
+SURVEY_NO_THANKS_TEXT = None
+def dismiss_survey(page):
+    """Detect QSI survey overlay, find the nearest 'No' button, cache its exact
+    label and click it. Returns True if a dismissal was attempted.
+    """
+    global SURVEY_NO_THANKS_TEXT
+
+    # Fast path: if we previously discovered the exact label, try that first
+    if SURVEY_NO_THANKS_TEXT:
+        try:
+            btn = page.get_by_text(SURVEY_NO_THANKS_TEXT, exact=True)
+            if btn.count() > 0:
+                btn.first.click()
+                page.wait_for_selector(".QSIWebResponsiveShadowBox", state="detached", timeout=500)
+                return True
+        except Exception:
+            pass
+
+    # Wait briefly for the overlay to appear; if it doesn't, nothing to do
+    try:
+        overlay = page.locator(".QSIWebResponsiveShadowBox").first
+        page.wait_for_selector(".QSIWebResponsiveShadowBox", timeout=500)
+        overlay_box = overlay.bounding_box()
+        if not overlay_box:
+            return False
+    except Exception:
+        return False
+
+    # Look for visible actionable elements that include the word 'no'
+    candidates = page.locator('button, a, [role="button"], input[type="button"]')
+    best_idx = None
+    best_dist = None
+    found_text = None
+
+    ox = overlay_box["x"] + overlay_box["width"] / 2
+    oy = overlay_box["y"] + overlay_box["height"] / 2
+
+    for i in range(candidates.count()):
+        cand = candidates.nth(i)
+        try:
+            txt = cand.inner_text().strip()
+            if not txt:
+                continue
+            if re.search(r"\bno\b", txt, re.I):
+                bb = cand.bounding_box()
+                if not bb:
+                    continue
+                cx = bb["x"] + bb["width"] / 2
+                cy = bb["y"] + bb["height"] / 2
+                dist = (ox - cx) ** 2 + (oy - cy) ** 2
+                if best_dist is None or dist < best_dist:
+                    best_dist = dist
+                    best_idx = i
+                    found_text = txt
+        except Exception:
+            continue
+
+    if best_idx is not None:
+        try:
+            target = candidates.nth(best_idx)
+            target.click()
+            page.wait_for_selector(".QSIWebResponsiveShadowBox", state="detached", timeout=500)
+            SURVEY_NO_THANKS_TEXT = found_text
+            return True
+        except Exception:
+            return False
+
+    return False
 
 # Function to display passed list and allow user to continue to add to it until 'done'
 def usr_card_input(card_names, prompt):
