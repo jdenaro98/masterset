@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
 import questionary, re, time, sys, os
 import optimizer
+import cart_create
 import requests
 
 def main():
@@ -177,7 +178,8 @@ def main():
 
         # Need to add logic/loop here to handle various urls
         for i in range(len(url_list)):
-            C_URL = f"https://www.tcgplayer.com{url_list[i]}&Condition=Lightly+Played|Near+Mint&page=1"
+            # print(url_list[i])   # Debug
+            C_URL = f"https://www.tcgplayer.com{url_list[i]}?Language=all&Condition=Lightly+Played|Near+Mint&page=1"
             page.goto(C_URL)
             page.wait_for_load_state("networkidle")
             
@@ -241,17 +243,24 @@ def main():
         total = item.get('total') if item.get('total') is not None else 0.0
         print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
 
+    if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
+        cookie_export_path = cart_create.create_cart(optimized_cart)
+        if cookie_export_path:
+            print(f"Cart cookies exported to: {cookie_export_path}")
+        else:
+            print("Cart creation finished, but cookie export was not completed.")
+
 ###############################################################################
 
 # Scrape from page
 def scrape_listings(page, game):
     listings_data = []
     # Identify all listing rows
-    listings = page.locator("section.listing-item")
+    listings = page.locator(".listing-item")
 
     # Wait briefly for listings to appear (some pages load dynamically)
     try:
-        page.wait_for_selector("section.listing-item", timeout=5000)
+        page.wait_for_selector(".listing-item", timeout=10000)
     except Exception:
         return listings_data
 
