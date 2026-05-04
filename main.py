@@ -274,8 +274,8 @@ def main():
             price = item.get('price') if item.get('price') is not None else 0.0
             shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
             total = item.get('total') if item.get('total') is not None else 0.0
-            url = item.get('card_url')
-            print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
+            url = item.get('card_url') or 'N/A'
+            print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f} | {url}")
 
         if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
             cookie_export_path = cart_create.create_cart(optimized_cart)
@@ -439,12 +439,13 @@ def usr_card_input(card_names, prompt):
                 title="Select a File",
                 filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
             )
-            root.attributes('-topmost', False)
-            # print(f"Selected file: {file_path}")
-                # Open the file and read lines into a list
-            with open(file_path, 'r') as file:
-                # .strip() removes the extra spacing/newlines from each line
-                cardlist = [line.strip() for line in file.readlines()]
+            root.destroy()  # Close the root window 
+
+            # Open the file and read lines into a list
+            if file_path:
+                with open(file_path, 'r') as file:
+                    # .strip() removes the extra spacing/newlines from each line
+                    cardlist = [line.strip() for line in file.readlines()]
         elif temp.lower() == 'save':
             root = tk.Tk()
             root.withdraw()
@@ -456,6 +457,7 @@ def usr_card_input(card_names, prompt):
                 filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
                 title="Choose where to save your list"
             )
+            root.destroy()  # Close the root window 
 
             # Only proceed if user doesn't hit cancel
             if file_path:
