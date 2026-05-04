@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
 import questionary, re, time, sys, os
 import optimizer
+import requests
 
 def main():
     with sync_playwright() as pw:
@@ -176,7 +177,7 @@ def main():
 
         # Need to add logic/loop here to handle various urls
         for i in range(len(url_list)):
-            C_URL = f"https://www.tcgplayer.com{url_list[i]}"
+            C_URL = f"https://www.tcgplayer.com{url_list[i]}&Condition=Lightly+Played|Near+Mint&page=1"
             page.goto(C_URL)
             page.wait_for_load_state("networkidle")
             
@@ -185,53 +186,7 @@ def main():
                 dismiss_survey(page)
             except Exception:
                 pass
-
-            page.get_by_test_id("showFilters").click()
-            drawer = page.locator(".tcg-drawer__sheet")
-            drawer.wait_for(state="visible")        
             
-            # After showing filters, a survey may appear; dismiss if present
-            try:
-                dismiss_survey(page)
-            except Exception:
-                pass
-
-            # Scrolling and selecting 'lightly played' which will also select 'near mint'
-            # FUTURE: Add user input to decide what conditions they're ok with
-
-            # LP Filter Check (only if it exists)
-            lp_filter = page.locator(".tcg-input-checkbox", has_text="Lightly Played")
-            if lp_filter.count() > 0:
-                lp_filter.scroll_into_view_if_needed()
-                page.locator("#Condition-LightlyPlayed-filter").click(force=True)
-                expect(lp_filter).to_have_class(re.compile(r"is-checked"))
-                time.sleep(0.5)
-
-                # After checking one filter, a survey may appear; dismiss if present
-                try:
-                    dismiss_survey(page)
-                except Exception:
-                    pass
-
-            # NM Filter Check (only if it exists)
-            nm_filter = page.locator(".tcg-input-checkbox", has_text="Near Mint")
-            if nm_filter.count() > 0:
-                nm_filter.scroll_into_view_if_needed()
-                page.locator("#Condition-NearMint-filter").click(force=True)
-                expect(nm_filter).to_have_class(re.compile(r"is-checked"))
-                time.sleep(0.5)
-
-            # After saving filters a survey may appear; dismiss if present
-            try:
-                dismiss_survey(page)
-            except Exception:
-                pass
-
-            # Save Filters
-            page.locator(".filter-drawer-footer__button-save").click()
-            page.wait_for_load_state("networkidle")
-
-
             # Load 50 per page (max allowed)
             dropdown_container = page.locator(".tcg-input-field", has_text="Listings / Page")
             trigger = dropdown_container.get_by_role("combobox")
@@ -241,6 +196,11 @@ def main():
             page.get_by_role("option", name="50").click()
             page.wait_for_load_state("networkidle")
 
+            # After saving filters a survey may appear; dismiss if present
+            try:
+                dismiss_survey(page)
+            except Exception:
+                pass
 
             # ======================================================================
             # Stage 6: Add all seller data to nested list/dict structure for each card
@@ -266,7 +226,20 @@ def main():
                 print(f"  - {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
         print("")
 
-    optimizer.optimize(all_card_data)
+    optimized_cart = optimizer.optimize(all_card_data)
+
+    print("Optimized cart:")
+    sellers = {item['seller'] for item in optimized_cart if item.get('seller')}
+    total_cost = sum(item['total'] for item in optimized_cart if item.get('total') is not None)
+    print(f"  Unique sellers: {len(sellers)}")
+    print(f"  Estimated total: ${total_cost:.2f}\n")
+    for item in optimized_cart:
+        seller = item.get('seller') or 'N/A'
+        condition = item.get('condition') or 'N/A'
+        price = item.get('price') if item.get('price') is not None else 0.0
+        shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
+        total = item.get('total') if item.get('total') is not None else 0.0
+        print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
 
 ###############################################################################
 
@@ -299,7 +272,6 @@ def scrape_listings(page, game):
         condition = item.locator(".listing-item__listing-data__info__condition").inner_text().strip()
         price = item.locator(".listing-item__listing-data__info__price").inner_text().strip()
         raw_shipping = item.locator(".listing-item__listing-data__info span").inner_text().strip()
-        
         # Handle "Included" vs numerical
         shipping_clean = "$0.00" if "Included" in raw_shipping else \
                          raw_shipping.replace("+", "").replace("Shipping", "").strip()
@@ -310,7 +282,8 @@ def scrape_listings(page, game):
             "condition": condition,
             "price": parse_money(price),
             "shipping": parse_money(shipping_clean),
-            "total": parse_money(price) + parse_money(shipping_clean)
+            "total": parse_money(price) + parse_money(shipping_clean),
+            "card_url": page.url,
         })
     return listings_data
 
