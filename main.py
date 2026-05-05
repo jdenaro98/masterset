@@ -1,6 +1,8 @@
 from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
 import questionary, re, time, sys, os, subprocess
+from urllib.parse import parse_qs, urlparse
+import crossfiledialog
 import optimizer
 import cart_create
 import requests
@@ -179,20 +181,38 @@ def main():
         with sync_playwright() as pw:
             all_card_data = {}
             browser = pw.chromium.launch(headless=False, args=["--window-size=640,640"])
-            page = browser.new_page()
+            context = browser.new_context()
+
+            # 2. Inject the cookies into the context BEFORE creating the page
+            context.add_cookies([
+                {
+                    "name": "SearchCriteria",
+                    "value": "M=1&WantVerifiedSellers=True&WantDirect=False&WantSellersInCart=False&WantWPNSellers=False",
+                    "domain": ".tcgplayer.com",
+                    "path": "/"
+                },
+                {
+                    "name": "product-display-settings",
+                    "value": "sort=price+shipping&size=50",
+                    "domain": ".tcgplayer.com",
+                    "path": "/"
+                }
+            ])
+
+            page = context.new_page()
             stealth_config = Stealth()
             stealth_config.apply_stealth_sync(page)
 
             # Iterative scraping of every card in url_list
             for i in range(len(url_list)):
                 # print(url_list[i])   # Debug
-                C_URL = f"https://www.tcgplayer.com{url_list[i]}?Language=all&Condition=Lightly+Played|Near+Mint&page=1"
+                C_URL = f"https://www.tcgplayer.com{url_list[i]}?Language=all&Condition=Lightly+Played|Near+Mint"
                 
                 # Robust URL attempt to avoid error page, empty pages and 'false' out of stock pages
                 max_retries = 3
                 for attempt in range(max_retries):
                         try:
-                            print(C_URL)
+                            # print(C_URL)
                             page.goto(C_URL, wait_until="networkidle")
                             
                             # A survey may appear; dismiss if present
@@ -207,6 +227,7 @@ def main():
                             is_no_listings = page.locator(".no-result").count() > 0
                             if not is_error_page and not is_empty_load and not is_no_listings:
                                 break   # Proceed to scrape
+                            time.sleep(0.25)  # Brief pause before retrying
 
                             # Identify the reason for logging
                             if is_error_page: reason = "Server Error"
@@ -217,25 +238,9 @@ def main():
 
                         except Exception as e:
                             print(f"Navigation error: {e}. Retrying...")
-                        time.sleep(0.25)
                         if attempt == max_retries - 1:
                             print(f"CRITICAL: Failed to load {card_list[i]} after {max_retries} tries.")
                             continue
-
-                # Load 50 per page (max allowed)
-                dropdown_container = page.locator(".tcg-input-field", has_text="Listings / Page")
-                trigger = dropdown_container.get_by_role("combobox")
-                trigger.scroll_into_view_if_needed()
-                trigger.wait_for(state="visible")
-                trigger.click()
-                page.get_by_role("option", name="50").click()
-                page.wait_for_load_state("networkidle")
-
-                # After selcting items/page a survey may appear; dismiss if present
-                try:
-                    dismiss_survey(page)
-                except Exception:
-                    pass
 
                 # ======================================================================
                 # Stage 6: Add all seller data to nested list/dict structure for each card
@@ -404,6 +409,13 @@ def dismiss_survey(page):
 
     return False
 
+def _centered_file_dialog(dialog_type, **options):
+    """Cross-platform native file picker wrapper."""
+    if dialog_type == 'open':
+        return crossfiledialog.open_file(title=options.get('title', 'Select a File'))
+    else:
+        return crossfiledialog.save_file(title=options.get('title', 'Choose where to save your list'))
+
 # Function to display passed list and allow user to continue to add to it until 'done'
 def usr_card_input(card_names, prompt):
     done = 0
@@ -428,36 +440,23 @@ def usr_card_input(card_names, prompt):
         elif temp.lower() == 'load':
             # Zeroes the list in case user previously added some
             cardlist = []
-            # Create a root window and hide it
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes('-topmost', True)
-
-            # Open the file picker and get the path
-            file_path = filedialog.askopenfilename(
-                parent=root,     # Links to root
+            file_path = _centered_file_dialog(
+                'open',
                 title="Select a File",
                 filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
             )
-            root.destroy()  # Close the root window 
 
             # Open the file and read lines into a list
             if file_path:
                 with open(file_path, 'r') as file:
-                    # .strip() removes the extra spacing/newlines from each line
                     cardlist = [line.strip() for line in file.readlines()]
         elif temp.lower() == 'save':
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes('-topmost', True)
-
-            # Open the "Save As" dialog
-            file_path = filedialog.asksaveasfilename(
+            file_path = _centered_file_dialog(
+                'save',
                 defaultextension=".txt",
                 filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
                 title="Choose where to save your list"
             )
-            root.destroy()  # Close the root window 
 
             # Only proceed if user doesn't hit cancel
             if file_path:
