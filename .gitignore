@@ -1,3 +1,5 @@
 /__pycache__
 *.cpython-313.pyc
 /.playwright_cart_profile
+/user_data
+tcgplayer_cookies.json

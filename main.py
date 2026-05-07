@@ -18,7 +18,7 @@ def main():
 
             print("==================================")
             print("Welcome to the TCGPlayer Scraper!")
-            print("=================================")
+            print("==================================")
             print(".\n.\n.\n")
             print("Gathering a list of TCG Games...")
 
@@ -280,7 +280,8 @@ def main():
             shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
             total = item.get('total') if item.get('total') is not None else 0.0
             url = item.get('card_url') or 'N/A'
-            print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f} | {url}")
+            seller_id = item.get('seller_id') or 'N/A'
+            print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f} | {url} | {seller_id}")
 
         if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
             cookie_export_path = cart_create.create_cart(optimized_cart)
@@ -288,6 +289,8 @@ def main():
                 print(f"Cart cookies exported to: {cookie_export_path}")
             else:
                 print("Cart creation finished, but cookie export was not completed.")
+
+        break
 
 ###############################################################################
 
@@ -307,12 +310,19 @@ def scrape_listings(page, game):
         item = listings.nth(i)
         
         # Skip non-English/Japanese listings for Pokemon sets by checking the listing title
-        if game == "Pokemon Japan" or game == "Pokemon":
+        if game == "Pokemon Japan":
             title_locator = item.locator(".listing-item__listing-data__listo__title")
             if title_locator.count() > 0:
                 title = title_locator.first.text_content(timeout=1000) or ""
-                if re.search(r'(Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
-                    print("Skipping non-English/Japanese listing")
+                if re.search(r'(English|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
+                    print("Skipping non-Japanese listing")
+                    continue
+        elif game == "Pokemon":
+            title_locator = item.locator(".listing-item__listing-data__listo__title")
+            if title_locator.count() > 0:
+                title = title_locator.first.text_content(timeout=1000) or ""
+                if re.search(r'(Japanese|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
+                    print("Skipping non-English listing")
                     continue
         
         # Scrape raw strings
@@ -320,10 +330,44 @@ def scrape_listings(page, game):
         condition = item.locator(".listing-item__listing-data__info__condition").inner_text().strip()
         price = item.locator(".listing-item__listing-data__info__price").inner_text().strip()
         raw_shipping = item.locator(".listing-item__listing-data__info span").inner_text().strip()
+
         # Handle "Included" vs numerical
         shipping_clean = "$0.00" if "Included" in raw_shipping else \
                          raw_shipping.replace("+", "").replace("Shipping", "").strip()
+
+        # Scraping data unique to cart creation
+        parsed_url = urlparse(page.url)
+        query_params = parse_qs(parsed_url.query)
+        anonymous_id = query_params.get("anonymousId", [None])[0]
+        
+        # Fallback: Check cookies if it's not in the URL
+        if not anonymous_id or anonymous_id == "N/A":
+            cookies = page.context.cookies()
+            for c in cookies:
+                if c['name'] == 'ajs_anonymous_id':
+                    anonymous_id = c['value']
+                    break
+
+        # Default to N/A only if both fail
+        if not anonymous_id:
+            anonymous_id = "N/A"
+
+        add_to_cart_locator = item.locator('section[data-testid^="AddToCart_"]')
+        if add_to_cart_locator.count() > 0:
+            test_id_attr = add_to_cart_locator.first.get_attribute("data-testid")
             
+            # 2. Split with a limit of 1 to prevent "too many values to unpack"
+            try:
+                id_part = test_id_attr.split("_")[1]
+                listing_id, seller_id = id_part.split("-", 1) 
+            except (IndexError, ValueError):
+                listing_id, seller_id = "N/A", "N/A"
+        else:
+            listing_id, seller_id = "N/A", "N/A"
+        context = page.context
+        cookies = context.cookies()
+        cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
+
         # Add this seller's dict to the list
         listings_data.append({
             "seller": seller,
@@ -332,6 +376,10 @@ def scrape_listings(page, game):
             "shipping": parse_money(shipping_clean),
             "total": parse_money(price) + parse_money(shipping_clean),
             "card_url": page.url,
+            "anonymous_id": anonymous_id,
+            "listing_id": listing_id,
+            "seller_id": seller_id,
+            "cookie_str": cookie_str
         })
     return listings_data
 

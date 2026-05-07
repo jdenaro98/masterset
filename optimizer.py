@@ -1,23 +1,31 @@
 import math
 from itertools import combinations
 
-
 def optimize(all_card_data):
     """Return a cart selecting one listing per card while preferring fewer sellers.
 
-    This optimizer will prefer assignments with fewer unique sellers only when the
-    selected listing price for each card is within one standard deviation of that
-    card's overall price distribution. Total cost remains the tiebreaker.
+    This optimizer prefers assignments with fewer unique sellers. A more expensive 
+    listing is only considered to reduce seller count if its price is less than 
+    the total cost (price + shipping) of the cheapest available listing for that card.
     """
     if not all_card_data:
         return []
 
     card_names = list(all_card_data.keys())
     all_cards_set = set(card_names)
-    price_stats = _build_card_price_stats(all_card_data)
+    
+    # Identify the baseline cheapest total cost for each card
+    # This represents the "less expensive card" comparison point
+    cheapest_totals = {}
+    for card, listings in all_card_data.items():
+        if listings:
+            cheapest_totals[card] = min(l["total"] for l in listings if l.get("total") is not None)
+        else:
+            cheapest_totals[card] = math.inf
 
     seller_cards = {}
     seller_cards_acceptable = {}
+    
     for card, listings in all_card_data.items():
         if not listings:
             continue
@@ -25,12 +33,16 @@ def optimize(all_card_data):
             seller = listing.get("seller")
             if not seller:
                 continue
+                
+            # 1. Track all valid listings for the backup greedy search
             seller_cards.setdefault(seller, {})
             current = seller_cards[seller].get(card)
             if current is None or _listing_preferred(listing, current):
                 seller_cards[seller][card] = listing
 
-            if _listing_within_stddev(listing, card, price_stats):
+            # 2. Filter "Acceptable" listings based on the shipping-offset rule:
+            # Price of this card <= (Price of cheapest + Shipping of cheapest)
+            if listing.get("price") is not None and listing["price"] <= cheapest_totals[card]:
                 seller_cards_acceptable.setdefault(seller, {})
                 current_acceptable = seller_cards_acceptable[seller].get(card)
                 if current_acceptable is None or _listing_preferred(listing, current_acceptable):
@@ -39,7 +51,10 @@ def optimize(all_card_data):
     if not seller_cards:
         return [{"card": card, "seller": None, "condition": None, "price": None, "shipping": None, "total": None} for card in card_names]
 
+    # Attempt to find the best combination of sellers using only "acceptable" listings
     best_seller_set, seller_cards_used = _find_best_seller_set(card_names, seller_cards_acceptable, seller_cards)
+    
+    # If no combination of "acceptable" cards covers the whole list, fall back to all listings
     if best_seller_set is None:
         best_seller_set, seller_cards_used = _find_best_seller_set(card_names, seller_cards, seller_cards)
 
@@ -54,37 +69,13 @@ def optimize(all_card_data):
             "shipping": assignment.get(card, {}).get("shipping"),
             "total": assignment.get(card, {}).get("total"),
             "card_url": assignment.get(card, {}).get("card_url"),
-            "add_to_cart": assignment.get(card, {}).get("add_to_cart"),
-            "add_to_cart_link": assignment.get(card, {}).get("add_to_cart_link"),
-            "add_to_cart_payload": assignment.get(card, {}).get("add_to_cart_payload"),
+            "anonymous_id": assignment.get(card, {}).get("anonymous_id"),
+            "listing_id": assignment.get(card, {}).get("listing_id"),
+            "seller_id": assignment.get(card, {}).get("seller_id"),
+            "cookie_str": assignment.get(card, {}).get("cookie_str"),
         }
         for card in card_names
     ]
-
-
-def _build_card_price_stats(all_card_data):
-    stats = {}
-    for card, listings in all_card_data.items():
-        prices = [listing["price"] for listing in listings if listing.get("price") is not None]
-        if not prices:
-            continue
-        mean = sum(prices) / len(prices)
-        variance = sum((price - mean) ** 2 for price in prices) / len(prices)
-        stats[card] = {
-            "mean": mean,
-            "stddev": math.sqrt(variance),
-        }
-    return stats
-
-
-def _listing_within_stddev(listing, card, stats):
-    price = listing.get("price")
-    if price is None or card not in stats:
-        return False
-    card_stats = stats[card]
-    if card_stats["stddev"] == 0:
-        return True
-    return abs(price - card_stats["mean"]) <= card_stats["stddev"]
 
 
 def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
@@ -92,6 +83,7 @@ def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
         return None, None
 
     all_cards_set = set(card_names)
+    # Sort sellers to prioritize those who have more of our cards and lower average costs
     candidate_sellers = sorted(
         seller_cards.keys(),
         key=lambda seller: (
@@ -104,6 +96,7 @@ def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
     best_set = None
     best_cost = math.inf
     best_seller_count = math.inf
+    # Limit search depth for performance; 18 is a reasonable ceiling for combinatorial search
     max_search_sellers = min(len(candidate_sellers), 18)
 
     for k in range(1, max_search_sellers + 1):
@@ -111,12 +104,16 @@ def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
             covered = set()
             for seller in sellers:
                 covered |= set(seller_cards[seller].keys())
+            
             if covered != all_cards_set:
                 continue
+                
             cost = _assignment_cost(sellers, card_names, seller_cards)
             if cost == math.inf:
                 continue
+                
             seller_count = len(set(sellers))
+            # Tiebreaker logic: Fewer sellers first, then lower total cost
             if seller_count < best_seller_count or (seller_count == best_seller_count and cost < best_cost):
                 best_cost = cost
                 best_seller_count = seller_count
@@ -125,6 +122,7 @@ def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
     if best_set is not None:
         return best_set, seller_cards
 
+    # If combinatorial search fails, use greedy heuristic
     if seller_cards is not backup_seller_cards:
         return _find_best_seller_set(card_names, backup_seller_cards, backup_seller_cards)
 
@@ -132,12 +130,14 @@ def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
 
 
 def _listing_preferred(a, b):
+    """Tiebreaker for individual listings: lower total cost, then lower shipping."""
     if a["total"] != b["total"]:
         return a["total"] < b["total"]
     return a["shipping"] < b["shipping"]
 
 
 def _assignment_cost(sellers, card_names, seller_cards):
+    """Calculate the total cost for a specific group of sellers."""
     cost = 0.0
     for card in card_names:
         best = None
@@ -163,20 +163,16 @@ def _choose_best_assignment(seller_set, card_names, seller_cards):
                 continue
             if best is None or _listing_preferred(listing, best):
                 best = listing
+        
         if best is not None:
             assignment[card] = best
         else:
-            assignment[card] = {
-                "seller": None,
-                "condition": None,
-                "price": None,
-                "shipping": None,
-                "total": None,
-            }
+            assignment[card] = {k: None for k in ["seller", "condition", "price", "shipping", "total", "card_url", "anonymous_id", "listing_id", "seller_id", "cookie_str"]}
     return assignment
 
 
 def _greedy_cost_cover(seller_cards, all_cards_set):
+    """Fallback heuristic to ensure we find a valid cart if combinations are too complex."""
     uncovered = set(all_cards_set)
     selected = set()
     while uncovered:
