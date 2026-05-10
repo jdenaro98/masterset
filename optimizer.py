@@ -1,199 +1,99 @@
 import math
-from itertools import combinations
 
 def optimize(all_card_data):
-    """Return a cart selecting one listing per card while preferring fewer sellers.
-
-    This optimizer prefers assignments with fewer unique sellers. A more expensive 
-    listing is only considered to reduce seller count if its price is less than 
-    the total cost (price + shipping) of the cheapest available listing for that card.
-    """
     if not all_card_data:
         return []
 
     card_names = list(all_card_data.keys())
-    all_cards_set = set(card_names)
     
-    # Identify the baseline cheapest total cost for each card
-    # This represents the "less expensive card" comparison point
-    cheapest_totals = {}
+    # 1. Establish the "Market Floor" (Cheapest total for each card)
+    market_floor = {}
     for card, listings in all_card_data.items():
         if listings:
-            cheapest_totals[card] = min(l["total"] for l in listings if l.get("total") is not None)
+            # We look at the best 'total' (price + shipping) as the baseline
+            market_floor[card] = min(l["total"] for l in listings)
         else:
-            cheapest_totals[card] = math.inf
+            market_floor[card] = math.inf
 
-    seller_cards = {}
-    seller_cards_acceptable = {}
-    
+    # 2. Build Seller Map
+    # Key: Seller Name, Value: { card_name: best_listing_from_this_seller }
+    seller_map = {}
     for card, listings in all_card_data.items():
-        if not listings:
-            continue
-        for listing in listings:
-            seller = listing.get("seller")
-            if not seller:
-                continue
-                
-            # 1. Track all valid listings for the backup greedy search
-            seller_cards.setdefault(seller, {})
-            current = seller_cards[seller].get(card)
-            if current is None or _listing_preferred(listing, current):
-                seller_cards[seller][card] = listing
-
-            # 2. Filter "Acceptable" listings based on the shipping-offset rule:
-            # Price of this card <= (Price of cheapest + Shipping of cheapest)
-            if listing.get("price") is not None and listing["price"] <= cheapest_totals[card]:
-                seller_cards_acceptable.setdefault(seller, {})
-                current_acceptable = seller_cards_acceptable[seller].get(card)
-                if current_acceptable is None or _listing_preferred(listing, current_acceptable):
-                    seller_cards_acceptable[seller][card] = listing
-
-    if not seller_cards:
-        return [{"card": card, "seller": None, "condition": None, "price": None, "shipping": None, "total": None} for card in card_names]
-
-    # Attempt to find the best combination of sellers using only "acceptable" listings
-    best_seller_set, seller_cards_used = _find_best_seller_set(card_names, seller_cards_acceptable, seller_cards)
-    
-    # If no combination of "acceptable" cards covers the whole list, fall back to all listings
-    if best_seller_set is None:
-        best_seller_set, seller_cards_used = _find_best_seller_set(card_names, seller_cards, seller_cards)
-
-    assignment = _choose_best_assignment(best_seller_set, card_names, seller_cards_used)
-
-    return [
-        {
-            "card": card,
-            "seller": assignment.get(card, {}).get("seller"),
-            "condition": assignment.get(card, {}).get("condition"),
-            "price": assignment.get(card, {}).get("price"),
-            "shipping": assignment.get(card, {}).get("shipping"),
-            "total": assignment.get(card, {}).get("total"),
-            "card_url": assignment.get(card, {}).get("card_url"),
-            "anonymous_id": assignment.get(card, {}).get("anonymous_id"),
-            "listing_id": assignment.get(card, {}).get("listing_id"),
-            "seller_id": assignment.get(card, {}).get("seller_id"),
-            "cookie_str": assignment.get(card, {}).get("cookie_str"),
-        }
-        for card in card_names
-    ]
-
-
-def _find_best_seller_set(card_names, seller_cards, backup_seller_cards):
-    if not seller_cards:
-        return None, None
-
-    all_cards_set = set(card_names)
-    # Sort sellers to prioritize those who have more of our cards and lower average costs
-    candidate_sellers = sorted(
-        seller_cards.keys(),
-        key=lambda seller: (
-            -len(seller_cards[seller]),
-            sum(listing["total"] for listing in seller_cards[seller].values()) / len(seller_cards[seller]),
-            sum(listing["total"] for listing in seller_cards[seller].values()),
-        ),
-    )
-
-    best_set = None
-    best_cost = math.inf
-    best_seller_count = math.inf
-    # Limit search depth for performance; 18 is a reasonable ceiling for combinatorial search
-    max_search_sellers = min(len(candidate_sellers), 18)
-
-    for k in range(1, max_search_sellers + 1):
-        for sellers in combinations(candidate_sellers[:max_search_sellers], k):
-            covered = set()
-            for seller in sellers:
-                covered |= set(seller_cards[seller].keys())
+        for l in listings:
+            s_name = l["seller"]
+            if s_name not in seller_map:
+                seller_map[s_name] = {}
             
-            if covered != all_cards_set:
-                continue
-                
-            cost = _assignment_cost(sellers, card_names, seller_cards)
-            if cost == math.inf:
-                continue
-                
-            seller_count = len(set(sellers))
-            # Tiebreaker logic: Fewer sellers first, then lower total cost
-            if seller_count < best_seller_count or (seller_count == best_seller_count and cost < best_cost):
-                best_cost = cost
-                best_seller_count = seller_count
-                best_set = set(sellers)
+            # If the seller has multiple listings for the same card (e.g. different conditions),
+            # keep only the cheapest one that meets user criteria.
+            if card not in seller_map[s_name] or l["total"] < seller_map[s_name][card]["total"]:
+                seller_map[s_name][card] = l
 
-    if best_set is not None:
-        return best_set, seller_cards
+    # 3. The Greedy Selection Loop
+    final_assignment = {}
+    uncovered_cards = set(card_names)
+    selected_sellers = set()
 
-    # If combinatorial search fails, use greedy heuristic
-    if seller_cards is not backup_seller_cards:
-        return _find_best_seller_set(card_names, backup_seller_cards, backup_seller_cards)
-
-    return _greedy_cost_cover(seller_cards, all_cards_set), seller_cards
-
-
-def _listing_preferred(a, b):
-    """Tiebreaker for individual listings: lower total cost, then lower shipping."""
-    if a["total"] != b["total"]:
-        return a["total"] < b["total"]
-    return a["shipping"] < b["shipping"]
-
-
-def _assignment_cost(sellers, card_names, seller_cards):
-    """Calculate the total cost for a specific group of sellers."""
-    cost = 0.0
-    for card in card_names:
-        best = None
-        for seller in sellers:
-            listing = seller_cards[seller].get(card)
-            if listing is None:
-                continue
-            if best is None or _listing_preferred(listing, best):
-                best = listing
-        if best is None:
-            return math.inf
-        cost += best["total"]
-    return cost
-
-
-def _choose_best_assignment(seller_set, card_names, seller_cards):
-    assignment = {}
-    for card in card_names:
-        best = None
-        for seller in seller_set:
-            listing = seller_cards[seller].get(card)
-            if listing is None:
-                continue
-            if best is None or _listing_preferred(listing, best):
-                best = listing
-        
-        if best is not None:
-            assignment[card] = best
-        else:
-            assignment[card] = {k: None for k in ["seller", "condition", "price", "shipping", "total", "card_url", "anonymous_id", "listing_id", "seller_id", "cookie_str"]}
-    return assignment
-
-
-def _greedy_cost_cover(seller_cards, all_cards_set):
-    """Fallback heuristic to ensure we find a valid cart if combinations are too complex."""
-    uncovered = set(all_cards_set)
-    selected = set()
-    while uncovered:
+    while uncovered_cards:
         best_seller = None
-        best_cover = set()
-        best_score = None
-        for seller, cards in seller_cards.items():
-            if seller in selected:
+        best_seller_value = -math.inf # We want to maximize "Value" (Savings/Coverage)
+
+        for s_name, s_inventory in seller_map.items():
+            # Only look at cards we haven't covered yet
+            can_provide = uncovered_cards.intersection(s_inventory.keys())
+            if not can_provide:
                 continue
-            cover = uncovered & set(cards.keys())
-            if not cover:
-                continue
-            cost = sum(cards[card]["total"] for card in cover)
-            avg_cost = cost / len(cover)
-            score = (-len(cover), avg_cost, cost)
-            if best_score is None or score < best_score:
-                best_score = score
-                best_cover = cover
-                best_seller = seller
-        if best_seller is None:
-            break
-        selected.add(best_seller)
-        uncovered -= best_cover
-    return selected
+
+            # Calculate Price Penalty: How much extra are we paying compared to the market floor?
+            price_penalty = sum(s_inventory[c]["price"] - market_floor[c] for c in can_provide)
+            
+            # Calculate potential shipping savings
+            # If we buy from this seller, we only pay shipping once (or zero if >$5)
+            potential_shipping = _estimate_shipping(s_inventory, can_provide)
+            
+            # VALUE SCORE: 
+            # We want high coverage (len) but low price penalty.
+            # You can tune the '2.0' multiplier to prefer consolidation more or less.
+            coverage_weight = len(can_provide) * 2.0 
+            value_score = coverage_weight - price_penalty - potential_shipping
+
+            if value_score > best_seller_value:
+                best_seller_value = value_score
+                best_seller = s_name
+
+        if not best_seller:
+            break # Should not happen unless cards are unfindable
+
+        # Assign the cards
+        for c in uncovered_cards.intersection(seller_map[best_seller].keys()):
+            full_listing = seller_map[best_seller][c].copy()
+            full_listing['card'] = c
+            final_assignment[c] = full_listing
+            uncovered_cards.remove(c)
+        
+        selected_sellers.add(best_seller)
+
+    return [final_assignment.get(card, _empty_result(card)) for card in card_names]
+
+def _estimate_shipping(inventory, card_subset):
+    """Predicts if shipping will be $0 or $X based on TCGPlayer's $5 rule."""
+    subtotal = sum(inventory[c]["price"] for c in card_subset)
+    # Check if any item in the subset has the shipping deal flag
+    has_deal = any(inventory[c].get("shipping_deal") for c in card_subset)
+    
+    if has_deal and subtotal >= 5.0:
+        return 0.0
+    
+    # Otherwise, return the max shipping fee among the items
+    return max(inventory[c]["shipping"] for c in card_subset)
+
+def _empty_result(card_name):
+    return {
+        "card": card_name, 
+        "seller": None, 
+        "price": 0.0, 
+        "shipping": 0.0, 
+        "total": 0.0, 
+        "test_id_attr": None, 
+        "custom_listing_key": "N/A"
+    }

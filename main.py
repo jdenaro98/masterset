@@ -5,9 +5,8 @@ from urllib.parse import parse_qs, urlparse
 import crossfiledialog
 import optimizer
 import cart_create
-import requests
-import tkinter as tk
-from tkinter import filedialog
+from rich.progress import track
+import time
 
 def main():
     while True:
@@ -174,13 +173,13 @@ def main():
         print("Your final card list looks like:")
         for card in card_list:
             print(card)
-        
+
         # ======================================================================
         # Stage 6: Remake web browser, scrape data from card list, card urls
         # ======================================================================
         with sync_playwright() as pw:
             all_card_data = {}
-            browser = pw.chromium.launch(headless=False, args=["--window-size=640,640"])
+            browser = pw.chromium.launch(headless=False, args=["--window-size=320,320"])
             context = browser.new_context()
 
             # 2. Inject the cookies into the context BEFORE creating the page
@@ -203,8 +202,10 @@ def main():
             stealth_config = Stealth()
             stealth_config.apply_stealth_sync(page)
 
+            page.route("**/*.{png,jpg,jpeg,svg,webp,gif}", lambda route: route.abort())
+
             # Iterative scraping of every card in url_list
-            for i in range(len(url_list)):
+            for i in track(range(len(url_list)), description="Scraping cards..."):
                 # print(url_list[i])   # Debug
                 C_URL = f"https://www.tcgplayer.com{url_list[i]}?Language=all&Condition=Lightly+Played|Near+Mint"
                 
@@ -262,27 +263,31 @@ def main():
                     condition = s.get("condition", "")
                     price = s.get("price", "")
                     shipping = s.get("shipping", "")
+                    shipping_deal = s.get("shipping_deal", "")
                     total = s.get("total", "")
-                    print(f"  - {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f}")
+                    test_id = s.get("test_id_attr", "")
+                    custom_key = s.get("custom_listing_key", "")
+                    print(f"  - {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {test_id} | {custom_key}")
             print("")
+
+        # Create listing of just first listing for each card to show user before optimization
+        first_listing_data = []
+        for card_name, listings in all_card_data.items():
+            if listings:  # Check if there are any listings at all
+                # Create a copy or a new dict with the card name included for reference
+                first_entry = listings[0].copy()
+                first_entry['card'] = card_name
+                first_listing_data.append(first_entry)
+            else:
+                # Optional: Handle cards with no listings
+                print(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
+
+        print_cart(first_listing_data, "\nFirst Listings:\n")
 
         optimized_cart = optimizer.optimize(all_card_data)
 
-        print("Optimized cart:")
-        sellers = {item['seller'] for item in optimized_cart if item.get('seller')}
-        total_cost = sum(item['total'] for item in optimized_cart if item.get('total') is not None)
-        print(f"  Unique sellers: {len(sellers)}")
-        print(f"  Estimated total: ${total_cost:.2f}\n")
-        for item in optimized_cart:
-            seller = item.get('seller') or 'N/A'
-            condition = item.get('condition') or 'N/A'
-            price = item.get('price') if item.get('price') is not None else 0.0
-            shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
-            total = item.get('total') if item.get('total') is not None else 0.0
-            url = item.get('card_url') or 'N/A'
-            seller_id = item.get('seller_id') or 'N/A'
-            print(f"  - {item['card']} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | ${total:.2f} | {url} | {seller_id}")
-
+        print_cart(optimized_cart, "\nOptimized Cart:\n")
+        
         if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
             cookie_export_path = cart_create.create_cart(optimized_cart)
             if cookie_export_path:
@@ -293,6 +298,75 @@ def main():
         break
 
 ###############################################################################
+
+# Prints sructured dictionary that's sent to it (pre vs post optimization cart)
+def print_cart(cart, title):
+    print(title)
+    sellers = {item['seller'] for item in cart if item.get('seller')}
+    total_price = sum(item.get('price') or 0.0 for item in cart if item.get('price') is not None)
+    total_shipping = shipping_calc(cart)
+    total_cost = total_price + total_shipping
+    print(f"  Unique sellers: {len(sellers)}")
+    print(f"  Raw card cost: ${total_price:.2f}")
+    print(f"  Shipping Cost: ${total_shipping:.2f}")
+    print(f"  Estimated subtotal: ${total_cost:.2f}\n")
+    for item in cart:
+        seller = item.get('seller') or 'N/A'
+        condition = item.get('condition') or 'N/A'
+        price = item.get('price') if item.get('price') is not None else 0.0
+        shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
+        shipping_deal = item.get('shipping_deal') or 'N/A'
+        total = item.get('total') if item.get('total') is not None else 0.0
+        url = item.get('card_url') or 'N/A'
+        card = item.get('card') or 'N/A'
+        # seller_id = item.get('seller_id') or 'N/A'
+        print(f"  - {card} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
+
+def shipping_calc(cart):
+    """
+    Calculates total shipping cost based on seller-specific thresholds.
+    If 'shipping_deal' is True and the sum of card prices from a specific 
+    seller is >= $5.00, shipping for that seller becomes $0.00.
+    """
+    seller_totals = {}
+    total_shipping = 0.0
+    FREE_SHIPPING_THRESHOLD = 5.00
+
+    # 1. Aggregate card prices and shipping per seller
+    # We use seller_id as the primary key to ensure we don't mix up 
+    # different sellers with the same/similar names.
+    for item in cart:
+        sid = item.get('seller_id') or item.get('seller')
+        if sid not in seller_totals:
+            seller_totals[sid] = {
+                'items_price': 0.0,
+                'shipping_cost': 0.0,
+                'has_deal': False
+            }
+        
+        price_val = item.get('price')
+        seller_totals[sid]['items_price'] += price_val if price_val is not None else 0.0
+        
+        # We assume the shipping cost is consistent across items from the same seller 
+        # for a single order, so we track the highest shipping fee encountered for that seller.
+        ship_val = item.get('shipping') or 0.0
+        if ship_val > seller_totals[sid]['shipping_cost']:
+            seller_totals[sid]['shipping_cost'] = ship_val
+            
+        # If any item from this seller indicates a shipping deal exists
+        if item.get('shipping_deal') or False:
+            seller_totals[sid]['has_deal'] = True
+
+    # 2. Calculate the final shipping cost based on the $5 threshold
+    for sid, data in seller_totals.items():
+        if data['has_deal'] and data['items_price'] >= FREE_SHIPPING_THRESHOLD:
+            # Threshold met, shipping is free for this seller
+            continue
+        else:
+            # Threshold not met or no deal offered, add the seller's shipping fee
+            total_shipping += data['shipping_cost']
+
+    return round(total_shipping, 2)
 
 # Scrape from page
 def scrape_listings(page, game):
@@ -308,6 +382,8 @@ def scrape_listings(page, game):
 
     for i in range(listings.count()):
         item = listings.nth(i)
+        
+        listing_link_locator = item.locator("a.listing-item__listing-data__listo__listo-anchor")
         
         # Skip non-English/Japanese listings for Pokemon sets by checking the listing title
         if game == "Pokemon Japan":
@@ -330,43 +406,35 @@ def scrape_listings(page, game):
         condition = item.locator(".listing-item__listing-data__info__condition").inner_text().strip()
         price = item.locator(".listing-item__listing-data__info__price").inner_text().strip()
         raw_shipping = item.locator(".listing-item__listing-data__info span").inner_text().strip()
+        shipping_min_locator = item.locator(".free-shipping-over-min")
+        # Boolean for if it exists or not (dumb asssumption that if it exists, it's free over $5)
+        if shipping_min_locator.count() > 0:
+            shipping_deal = True
+            # Result: "Free Shipping on Orders Over $5"
+        else:
+            shipping_deal = False
 
         # Handle "Included" vs numerical
         shipping_clean = "$0.00" if "Included" in raw_shipping else \
                          raw_shipping.replace("+", "").replace("Shipping", "").strip()
 
-        # Scraping data unique to cart creation
-        parsed_url = urlparse(page.url)
-        query_params = parse_qs(parsed_url.query)
-        anonymous_id = query_params.get("anonymousId", [None])[0]
-        
-        # Fallback: Check cookies if it's not in the URL
-        if not anonymous_id or anonymous_id == "N/A":
-            cookies = page.context.cookies()
-            for c in cookies:
-                if c['name'] == 'ajs_anonymous_id':
-                    anonymous_id = c['value']
-                    break
-
-        # Default to N/A only if both fail
-        if not anonymous_id:
-            anonymous_id = "N/A"
-
+        # Gets listing_id, seller_id
         add_to_cart_locator = item.locator('section[data-testid^="AddToCart_"]')
         if add_to_cart_locator.count() > 0:
             test_id_attr = add_to_cart_locator.first.get_attribute("data-testid")
-            
-            # 2. Split with a limit of 1 to prevent "too many values to unpack"
-            try:
-                id_part = test_id_attr.split("_")[1]
-                listing_id, seller_id = id_part.split("-", 1) 
-            except (IndexError, ValueError):
-                listing_id, seller_id = "N/A", "N/A"
+            test_id_attr = test_id_attr.split("_")[1] if "_" in test_id_attr else test_id_attr
+
         else:
-            listing_id, seller_id = "N/A", "N/A"
-        context = page.context
-        cookies = context.cookies()
-        cookie_str = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
+            test_id_attr = None
+            # listing_id, seller_id = "N/A", "N/A"
+
+        custom_listing_key = "N/A"
+        if listing_link_locator.count() > 0:
+            href = listing_link_locator.first.get_attribute("href")
+            if href:
+                parts = href.split("/")
+                if len(parts) > 3:
+                    custom_listing_key = parts[3]
 
         # Add this seller's dict to the list
         listings_data.append({
@@ -374,12 +442,13 @@ def scrape_listings(page, game):
             "condition": condition,
             "price": parse_money(price),
             "shipping": parse_money(shipping_clean),
+            "shipping_deal": shipping_deal,
             "total": parse_money(price) + parse_money(shipping_clean),
             "card_url": page.url,
-            "anonymous_id": anonymous_id,
-            "listing_id": listing_id,
-            "seller_id": seller_id,
-            "cookie_str": cookie_str
+            # "listing_id": listing_id,
+            # "seller_id": seller_id,
+            "test_id_attr": test_id_attr,
+            "custom_listing_key": custom_listing_key
         })
     return listings_data
 

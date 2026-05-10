@@ -42,25 +42,34 @@ def create_cart(optimized_cart):
 
         # 3: Add all items to cart using new cartKey
         for item in optimized_cart:
-            listing_id = item.get('listing_id')
-            seller_id = item.get('seller_id')
-            if not listing_id or listing_id == "N/A":
-                continue
+            # listing_id = item.get('listing_id')
+            # seller_id = item.get('seller_id')
+            parts = item.get('test_id_attr').split('-')
+            custom_listing_key = item.get('custom_listing_key')
+            if len(parts) == 3:
+                add_url = f"https://mpgateway.tcgplayer.com/v1/cart/{cart_key}/listo/add?mpfev=5143"
+                payload = {
+                    "customListingKey": custom_listing_key, # Scrape this from the listing container
+                    "priceAtAdd": 0,
+                    "quantityToBuy": 1,
+                    "channelId": 0,
+                    "countryCode": "US"
+                }
+            else:
+                add_url = f"https://mpgateway.tcgplayer.com/v1/cart/{cart_key}/item/add?mpfev=5143"
             
-            add_url = f"https://mpgateway.tcgplayer.com/v1/cart/{cart_key}/item/add?mpfev=5143"
-            
-            # This payload matches the successful POST in 'add to cart_2.har'
-            payload = {
-                "sku": int(listing_id),
-                "sellerKey": seller_id or "",        # The API accepts an empty string if not specified
-                "channelId": 0,         # 0 is the default channel for the main marketplace
-                "requestedQuantity": 1, # Note the specific field name 'requestedQuantity'
-                "price": 0,             # Can be 0; the server validates current price on the backend
-                "isDirect": False,
-                "countryCode": "US"
-            }
+                # This payload matches the successful POST in 'add to cart_2.har'
+                payload = {
+                    "sku": int(parts[0]),       # Extracted from test_id_attr
+                    "sellerKey": parts[1],        # The API accepts an empty string if not specified
+                    "channelId": 0,         # 0 is the default channel for the main marketplace
+                    "requestedQuantity": 1, # Note the specific field name 'requestedQuantity'
+                    "price": 0,             # Can be 0; the server validates current price on the backend
+                    "isDirect": False,
+                    "countryCode": "US"
+                }
 
-            print(f"Adding listing for {item['card']}, {listing_id}.")
+            print(f"Adding listing for {item['card']}.")
 
             add_script = f"""
                 fetch("{add_url}", {{
@@ -72,9 +81,9 @@ def create_cart(optimized_cart):
             success = page.evaluate(add_script)
 
             if success:
-                print(f"Added {listing_id} successfully.")
+                print(f"Added {item['card']} successfully.")
             else:
-                print(f"Failed to add {item['card']}, {listing_id}.")
+                print(f"Failed to add {item['card']}.")
 
         # 4: Final Sync and View
         print("\nAll items added. Redirecting to your cart...")
