@@ -95,6 +95,7 @@ def main():
         with sync_playwright() as pw:
             card_names = []
             card_urls = []
+            product_ids = []
             browser = pw.chromium.launch(headless=True, args=["--window-size=640,640"])
             page = browser.new_page()
             stealth_config = Stealth()
@@ -113,7 +114,11 @@ def main():
                 link = product_links.nth(i)
                 card_names.append(link.inner_text().strip())
                 # titles.sort() # unnecessary for now
-                card_urls.append(link.get_attribute("href"))
+                url = link.get_attribute("href")
+                match = re.search(r'/product/(\d+)', url)
+                if match:
+                    product_ids.append(match.group(1))
+                card_urls.append(url)
                 # print(data)   # Debug
 
             # page.pause()      # Debug
@@ -122,7 +127,7 @@ def main():
         # ======================================================================
         # Stage 5: Do logic and some more user input based on previous selection
         # ======================================================================
-        # Inital ask on scraping method
+        # Initial ask on scraping method
         opts = ["1. Inclusive (type a list of card numbers you want data on)", "2. Exclusive (you want the whole set except a few card numbers)", "3. All Cards Please!"]
         scrape_choice = questionary.select(
             "Please Choose an option for how you'd like to scrape your card data",
@@ -175,81 +180,22 @@ def main():
             print(card)
 
         # ======================================================================
-        # Stage 6: Remake web browser, scrape data from card list, card urls
+        # Stage 6: Scrape data from card list
         # ======================================================================
-        with sync_playwright() as pw:
-            all_card_data = {}
-            browser = pw.chromium.launch(headless=False, args=["--window-size=320,320"])
-            context = browser.new_context()
-
-            # 2. Inject the cookies into the context BEFORE creating the page
-            context.add_cookies([
-                {
-                    "name": "SearchCriteria",
-                    "value": "M=1&WantVerifiedSellers=True&WantDirect=False&WantSellersInCart=False&WantWPNSellers=False",
-                    "domain": ".tcgplayer.com",
-                    "path": "/"
-                },
-                {
-                    "name": "product-display-settings",
-                    "value": "sort=price+shipping&size=50",
-                    "domain": ".tcgplayer.com",
-                    "path": "/"
-                }
-            ])
-
-            page = context.new_page()
-            stealth_config = Stealth()
-            stealth_config.apply_stealth_sync(page)
-
-            page.route("**/*.{png,jpg,jpeg,svg,webp,gif}", lambda route: route.abort())
-
-            # Iterative scraping of every card in url_list
-            for i in track(range(len(url_list)), description="Scraping cards..."):
-                # print(url_list[i])   # Debug
-                C_URL = f"https://www.tcgplayer.com{url_list[i]}?Language=all&Condition=Lightly+Played|Near+Mint"
-                
-                # Robust URL attempt to avoid error page, empty pages and 'false' out of stock pages
-                max_retries = 3
-                for attempt in range(max_retries):
-                        try:
-                            # print(C_URL)
-                            page.goto(C_URL, wait_until="networkidle")
-                            
-                            # A survey may appear; dismiss if present
-                            try:
-                                dismiss_survey(page)
-                            except Exception:
-                                pass
-
-                            # Checking if error/empty pages
-                            is_error_page = page.locator(".martech-error-page--content").count()
-                            is_empty_load = page.locator(".product-details__name").count() == 0
-                            is_no_listings = page.locator(".no-result").count() > 0
-                            if not is_error_page and not is_empty_load and not is_no_listings:
-                                break   # Proceed to scrape
-                            time.sleep(0.25)  # Brief pause before retrying
-
-                            # Identify the reason for logging
-                            if is_error_page: reason = "Server Error"
-                            elif is_no_listings: reason = "False 'No Listings' detected"
-                            else: reason = "Empty/Ghost Page"
+        for product_id, card_name in track(range(zip(product_ids, card_list), description="Scraping cards..."):
             
-                            print(f"[{reason}] for {card_list[i]}. Attempt {attempt + 1}/{max_retries}...")
+            print(f"Processing: {card_name} (ID: {product_id})...")
 
-                        except Exception as e:
-                            print(f"Navigation error: {e}. Retrying...")
-                        if attempt == max_retries - 1:
-                            print(f"CRITICAL: Failed to load {card_list[i]} after {max_retries} tries.")
-                            continue
+            raw_listings = fetch_listings(product_id)
+            cleaned_listings = extract_key_chars(raw_listings)
 
-                # ======================================================================
-                # Stage 6: Add all seller data to nested list/dict structure for each card
-                # ======================================================================
-                # Call scraping logic
-                all_card_data[card_list[i]] = scrape_listings(page, game_rq)
-
-            browser.close()
+            all_card_data[product_id] = {
+                "card_info": {
+                    "name": card_name,
+                    "total_active_listings": len(cleaned_listings)
+                },
+                "market_listings": cleaned_listings
+            }
 
     # Debug print of all scraped data, can be removed later
         print("Scraped listings:")
