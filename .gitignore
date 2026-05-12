@@ -1,0 +1,8 @@
+/__pycache__
+*.cpython-313.pyc
+/.playwright_cart_profile
+/user_data
+tcgplayer_cookies.json
+.DS_Store
+*.har
+gemini_sloP.py
