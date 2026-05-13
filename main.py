@@ -117,7 +117,7 @@ def main():
                 url = link.get_attribute("href")
                 match = re.search(r'/product/(\d+)', url)
                 if match:
-                    product_ids.append(match.group(1))
+                    product_ids.append(int(match.group(1)))
                 card_urls.append(url)
                 # print(data)   # Debug
 
@@ -135,6 +135,8 @@ def main():
         ).ask()
 
         url_list = []
+        card_list = []
+        product_id_list = []
         # Prompt which cards and create short list of desired cards
         # Eventaully make it even fanci and allow file uploading (don't know what format)
         if scrape_choice == opts[0]:
@@ -146,10 +148,11 @@ def main():
                 \n Type 'save' to save a file of cards you've already selected"
             card_list = usr_card_input(card_names, prompt)
 
-            # Creating proper list of card names/urls
+            # Creating proper list of card names/urls/ids
             for card in card_list:
                 i = card_names.index(card)
                 url_list.append(card_urls[i])
+                product_id_list.append(product_ids[i])
 
         # Prompt which cards and create short(er) list with prompted cards removed
         # Eventually make fancy as above
@@ -163,16 +166,19 @@ def main():
             cards_exclude = usr_card_input(card_names, prompt)
             card_list = card_names
             url_list = card_urls
+            product_id_list = product_ids
             
-            # Creating proper list of card names/urls
+            # Creating proper list of card names/urls/ids
             for card in cards_exclude:
                 i = card_names.index(card)
                 card_list.pop(i)
                 url_list.pop(i)
+                product_id_list.pop(i)
         # Basically do nothing beceause user wants whole list    
         else:
             card_list = card_names
             url_list = card_urls
+            product_id_list = product_ids
 
         # Final display, need to add option to restart back at the card choosing
         print("Your final card list looks like:")
@@ -182,11 +188,18 @@ def main():
         # ======================================================================
         # Stage 6: Scrape data from card list
         # ======================================================================
-        for product_id, card_name in track(range(zip(product_ids, card_list), description="Scraping cards..."):
+        all_card_data = {}
+        first_listing_data = []
+        max_listings = 50
+        for product_id, card_name in track(
+            zip(product_id_list, card_list),
+            description="Scraping cards...",
+            total=len(card_list)
+            ):
             
             print(f"Processing: {card_name} (ID: {product_id})...")
-
-            raw_listings = fetch_listings(product_id)
+            
+            raw_listings = fetch_listings(product_id, max_listings)
             cleaned_listings = extract_key_chars(raw_listings)
 
             all_card_data[product_id] = {
@@ -197,28 +210,10 @@ def main():
                 "market_listings": cleaned_listings
             }
 
-    # Debug print of all scraped data, can be removed later
-        print("Scraped listings:")
-        for card, listings in all_card_data.items():
-            print(card)
-            if not listings:
-                print("  (no listings)")
-            else:
-                for s in listings:
-                    seller = s.get("seller", "")
-                    condition = s.get("condition", "")
-                    price = s.get("price", "")
-                    shipping = s.get("shipping", "")
-                    shipping_deal = s.get("shipping_deal", "")
-                    total = s.get("total", "")
-                    test_id = s.get("test_id_attr", "")
-                    custom_key = s.get("custom_listing_key", "")
-                    print(f"  - {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {test_id} | {custom_key}")
-            print("")
-
         # Create listing of just first listing for each card to show user before optimization
-        first_listing_data = []
-        for card_name, listings in all_card_data.items():
+        for product_id, card_data in all_card_data.items():
+            card_name = card_data["card_info"]["name"]
+            listings = card_data["market_listings"]
             if listings:  # Check if there are any listings at all
                 # Create a copy or a new dict with the card name included for reference
                 first_entry = listings[0].copy()
@@ -245,6 +240,137 @@ def main():
 
 ###############################################################################
 
+# New API call version of getting card listing data
+def fetch_listings(product_id, max_listings=None):
+    # The API endpoint identified in the HAR file
+    url = f"https://mp-search-api.tcgplayer.com/v1/product/{product_id}/listings"
+    
+    # Headers mimicking the browser request from the HAR file
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "Origin": "https://www.tcgplayer.com",
+        "Referer": "https://www.tcgplayer.com/",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko/20100101 Firefox/149.0"
+    }
+    
+    all_listings = []
+    offset = 0
+    size = 50 # Fetching 50 listings per request
+    
+    with sync_playwright() as p:
+        # We use an APIRequestContext for direct HTTP requests without loading a full browser page
+        request_context = p.request.new_context()
+        
+        while True:
+            # Check if we've already fetched enough listings
+            if max_listings and len(all_listings) >= max_listings:
+                break
+            
+            # Payload replicated from the HAR file, dynamically updating 'from' and 'size'
+            payload = {
+                "filters": {
+                    "term": {"sellerStatus": "Live", "channelId": 0},
+                    "range": {"quantity": {"gte": 1}},
+                    "exclude": {"channelExclusion": 0}
+                },
+                "from": offset,
+                "size": size,
+                "sort": {"field": "price+shipping", "order": "asc"},
+                "context": {"shippingCountry": "US", "cart": {"packages": {}}},
+                "aggregations": ["listingType"]
+            }
+            
+            print(f"Fetching listings {offset} to {offset + size}...")
+            response = request_context.post(url, headers=headers, data=payload)
+            
+            if not response.ok:
+                print(f"Failed to fetch: {response.status} {response.status_text}")
+                break
+                
+            data = response.json()
+            
+            # Defensive check to ensure the expected JSON structure exists
+            if "results" not in data or not data["results"]:
+                break
+                
+            # The listings are nested inside the first result object
+            result_set = data["results"][0]
+            listings = result_set.get("results", [])
+            
+            if not listings:
+                break
+            
+            # Only add listings up to the max_listings limit
+            if max_listings:
+                listings_to_add = listings[:max_listings - len(all_listings)]
+                all_listings.extend(listings_to_add)
+            else:
+                all_listings.extend(listings)
+            
+            # If the API returns fewer listings than our size limit, we've reached the last page
+            if len(listings) < size:
+                break
+                
+            # Increment the offset for the next page
+            offset += size
+            
+    return all_listings
+
+# Extracts key (needed) characteristics from each listing on cards
+def extract_key_chars(raw_listings):
+    """Extracts and formats the relevant fields from the raw API response.
+        Can always come back and add more fields as desired when implementing settings"""
+    cleaned_listings = []
+    for item in raw_listings:
+        # Hard coded filters that I want but should be changed in the future
+        # Force verified seller/gold seller
+        if not (item.get("verifiedSeller") or item.get("goldSeller")):
+            continue
+        # Force NM/LP
+        if not (item.get("condition") == "Near Mint" or item.get("condition") == "Lightly Played"):
+            continue
+        # Skip listings that have alternate language listed
+        if item.get("customData", {}).get("title"):
+            titledata = ""
+            titledata = item.get("customData", {}).get("title")
+
+            if item.get("language") == "English":
+                if re.search(r'(Japanese|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', titledata, re.I):
+                    print("Skipping non-English listing")
+                    continue
+            elif item.get("language") == "Japanese":
+                if re.search(r'(English|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', titledata, re.I):
+                    print("Skipping non-Japanese listing")
+                    continue
+            else: pass
+
+        if (item.get("sellerShippingPrice") == 0 and item.get("shippingPrice") > 0):
+            sd = True
+        else:
+            sd = False
+
+        try:
+            parsed_seller = {
+                "price": item.get("price"),
+                "shipping": item.get("shippingPrice"),
+                "total": item.get("price", 0) + item.get("shippingPrice", 0),
+                "shipping_deal": sd,
+                "seller": item.get("sellerName"),
+                "verifiedSeller": item.get("verifiedSeller"),
+                "goldSeller": item.get("goldSeller"),
+                "condition": item.get("condition"),
+                "sku": int(item.get("productConditionId")),
+                "sellerKey": item.get("sellerKey"),
+                "title": item.get("customData", {}).get("title", "No Picture Linked"),
+                "custom_listing_key": item.get("customData", {}).get("linkId", "No Picture Linked")
+            }
+        except KeyError as e:
+            print(f"Missing expected field in listing: {e}")
+            continue
+        cleaned_listings.append(parsed_seller)
+    return cleaned_listings
+
 # Prints sructured dictionary that's sent to it (pre vs post optimization cart)
 def print_cart(cart, title):
     print(title)
@@ -268,6 +394,7 @@ def print_cart(cart, title):
         # seller_id = item.get('seller_id') or 'N/A'
         print(f"  - {card} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
 
+# Shipping price logic on per-seller basis
 def shipping_calc(cart):
     """
     Calculates total shipping cost based on seller-specific thresholds.
@@ -314,164 +441,7 @@ def shipping_calc(cart):
 
     return round(total_shipping, 2)
 
-# Scrape from page
-def scrape_listings(page, game):
-    listings_data = []
-    # Identify all listing rows
-    listings = page.locator(".listing-item")
-
-    # Wait briefly for listings to appear (some pages load dynamically)
-    try:
-        page.wait_for_selector(".listing-item", timeout=10000)
-    except Exception:
-        return listings_data
-
-    for i in range(listings.count()):
-        item = listings.nth(i)
-        
-        listing_link_locator = item.locator("a.listing-item__listing-data__listo__listo-anchor")
-        
-        # Skip non-English/Japanese listings for Pokemon sets by checking the listing title
-        if game == "Pokemon Japan":
-            title_locator = item.locator(".listing-item__listing-data__listo__title")
-            if title_locator.count() > 0:
-                title = title_locator.first.text_content(timeout=1000) or ""
-                if re.search(r'(English|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
-                    print("Skipping non-Japanese listing")
-                    continue
-        elif game == "Pokemon":
-            title_locator = item.locator(".listing-item__listing-data__listo__title")
-            if title_locator.count() > 0:
-                title = title_locator.first.text_content(timeout=1000) or ""
-                if re.search(r'(Japanese|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', title, re.I):
-                    print("Skipping non-English listing")
-                    continue
-        
-        # Scrape raw strings
-        seller = item.locator(".seller-info__name").inner_text().strip()
-        condition = item.locator(".listing-item__listing-data__info__condition").inner_text().strip()
-        price = item.locator(".listing-item__listing-data__info__price").inner_text().strip()
-        raw_shipping = item.locator(".listing-item__listing-data__info span").inner_text().strip()
-        shipping_min_locator = item.locator(".free-shipping-over-min")
-        # Boolean for if it exists or not (dumb asssumption that if it exists, it's free over $5)
-        if shipping_min_locator.count() > 0:
-            shipping_deal = True
-            # Result: "Free Shipping on Orders Over $5"
-        else:
-            shipping_deal = False
-
-        # Handle "Included" vs numerical
-        shipping_clean = "$0.00" if "Included" in raw_shipping else \
-                         raw_shipping.replace("+", "").replace("Shipping", "").strip()
-
-        # Gets listing_id, seller_id
-        add_to_cart_locator = item.locator('section[data-testid^="AddToCart_"]')
-        if add_to_cart_locator.count() > 0:
-            test_id_attr = add_to_cart_locator.first.get_attribute("data-testid")
-            test_id_attr = test_id_attr.split("_")[1] if "_" in test_id_attr else test_id_attr
-
-        else:
-            test_id_attr = None
-            # listing_id, seller_id = "N/A", "N/A"
-
-        custom_listing_key = "N/A"
-        if listing_link_locator.count() > 0:
-            href = listing_link_locator.first.get_attribute("href")
-            if href:
-                parts = href.split("/")
-                if len(parts) > 3:
-                    custom_listing_key = parts[3]
-
-        # Add this seller's dict to the list
-        listings_data.append({
-            "seller": seller,
-            "condition": condition,
-            "price": parse_money(price),
-            "shipping": parse_money(shipping_clean),
-            "shipping_deal": shipping_deal,
-            "total": parse_money(price) + parse_money(shipping_clean),
-            "card_url": page.url,
-            # "listing_id": listing_id,
-            # "seller_id": seller_id,
-            "test_id_attr": test_id_attr,
-            "custom_listing_key": custom_listing_key
-        })
-    return listings_data
-
-# Parses money to ints of 2 decimal places
-def parse_money(s):
-    return round(float(re.sub(r'[^0-9.]', '', s) or 0), 2)
-
-# Dismiss survey overlay (e.g., QSI web survey) if it appears
-SURVEY_NO_THANKS_TEXT = None
-def dismiss_survey(page):
-    """Detect QSI survey overlay, find the nearest 'No' button, cache its exact
-    label and click it. Returns True if a dismissal was attempted.
-    """
-    global SURVEY_NO_THANKS_TEXT
-
-    # Fast path: if we previously discovered the exact label, try that first
-    if SURVEY_NO_THANKS_TEXT:
-        try:
-            btn = page.get_by_text(SURVEY_NO_THANKS_TEXT, exact=True)
-            if btn.count() > 0:
-                btn.first.click()
-                page.wait_for_selector(".QSIWebResponsiveShadowBox", state="detached", timeout=500)
-                return True
-        except Exception:
-            pass
-
-    # Wait briefly for the overlay to appear; if it doesn't, nothing to do
-    try:
-        overlay = page.locator(".QSIWebResponsiveShadowBox").first
-        page.wait_for_selector(".QSIWebResponsiveShadowBox", timeout=500)
-        overlay_box = overlay.bounding_box()
-        if not overlay_box:
-            return False
-    except Exception:
-        return False
-
-    # Look for visible actionable elements that include the word 'no'
-    candidates = page.locator('button, a, [role="button"], input[type="button"]')
-    best_idx = None
-    best_dist = None
-    found_text = None
-
-    ox = overlay_box["x"] + overlay_box["width"] / 2
-    oy = overlay_box["y"] + overlay_box["height"] / 2
-
-    for i in range(candidates.count()):
-        cand = candidates.nth(i)
-        try:
-            txt = cand.inner_text().strip()
-            if not txt:
-                continue
-            if re.search(r"\bno\b", txt, re.I):
-                bb = cand.bounding_box()
-                if not bb:
-                    continue
-                cx = bb["x"] + bb["width"] / 2
-                cy = bb["y"] + bb["height"] / 2
-                dist = (ox - cx) ** 2 + (oy - cy) ** 2
-                if best_dist is None or dist < best_dist:
-                    best_dist = dist
-                    best_idx = i
-                    found_text = txt
-        except Exception:
-            continue
-
-    if best_idx is not None:
-        try:
-            target = candidates.nth(best_idx)
-            target.click()
-            page.wait_for_selector(".QSIWebResponsiveShadowBox", state="detached", timeout=500)
-            SURVEY_NO_THANKS_TEXT = found_text
-            return True
-        except Exception:
-            return False
-
-    return False
-
+# Prompts user with standard load/save dialog
 def _centered_file_dialog(dialog_type, **options):
     """Cross-platform native file picker wrapper."""
     if dialog_type == 'open':

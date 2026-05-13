@@ -4,11 +4,13 @@ def optimize(all_card_data):
     if not all_card_data:
         return []
 
-    card_names = list(all_card_data.keys())
+    card_names = [card_data["card_info"]["name"] for card_data in all_card_data.values()]
     
     # 1. Establish the "Market Floor" (Cheapest total for each card)
     market_floor = {}
-    for card, listings in all_card_data.items():
+    for product_id, card_data in all_card_data.items():
+        card = card_data["card_info"]["name"]
+        listings = card_data["market_listings"]
         if listings:
             # We look at the best 'total' (price + shipping) as the baseline
             market_floor[card] = min(l["total"] for l in listings)
@@ -18,7 +20,9 @@ def optimize(all_card_data):
     # 2. Build Seller Map
     # Key: Seller Name, Value: { card_name: best_listing_from_this_seller }
     seller_map = {}
-    for card, listings in all_card_data.items():
+    for product_id, card_data in all_card_data.items():
+        card = card_data["card_info"]["name"]
+        listings = card_data["market_listings"]
         for l in listings:
             s_name = l["seller"]
             if s_name not in seller_map:
@@ -94,6 +98,7 @@ def _empty_result(card_name):
         "price": 0.0, 
         "shipping": 0.0, 
         "total": 0.0, 
-        "test_id_attr": None, 
+        "sku": None,
+        "sellerKey": None,
         "custom_listing_key": "N/A"
     }
