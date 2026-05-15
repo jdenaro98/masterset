@@ -6,125 +6,91 @@ import crossfiledialog
 import optimizer
 import cart_create
 from rich.progress import track
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 
 def main():
     while True:
-        with sync_playwright() as pw:
-            URL = "https://www.tcgplayer.com/categories"
-            titles = []
-            urls = []
+        print("==================================")
+        print("Welcome to the TCGPlayer Scraper!")
+        print("==================================")
+        print(".\n.\n.\n")
+        print("Gathering a list of TCG Games...")
 
-            print("==================================")
-            print("Welcome to the TCGPlayer Scraper!")
-            print("==================================")
-            print(".\n.\n.\n")
-            print("Gathering a list of TCG Games...")
+        # ======================================================================
+        # Stage 1: Navigate to Categories Page and collect Games list
+        # ======================================================================
+        game_data = {}
+        categories_data = fetch_categories()
 
-            # ======================================================================
-            # Stage 1: Navigate to Categories Page and collect Games list
-            # ======================================================================
-            browser = pw.chromium.launch(headless=True, args=["--window-size=640,640"])
-            page = browser.new_page()
-            stealth_config = Stealth()
-            stealth_config.apply_stealth_sync(page)
-            page.goto(URL)
-            page.wait_for_load_state("networkidle")
+        # Cleaning to just game name, id
+        for item in categories_data:
+            game_data[item.get("productLineName")] = item.get("productLineId")
+        game_data = dict(sorted(game_data.items()))
+        # Printing output
+        for item, i in zip(game_data, range(len(game_data))):
+            print(f"{i+1}. {item}")
 
-            # Searching for only the games list container
-            games = page.locator(".site-map.grouping > .grouping").first
-            for link in games.get_by_test_id("base-link").all():
-                titles.append(link.inner_text())
-                # titles.sort() # unnecessary for now
-                urls.append(link.get_attribute("href"))
-                # print(data)   # Debug
+        # User input for requested game
+        game_rq = {}
+        game_rq = usr_game_input(game_data, "Please choose which game you'd like to scrape: \
+                               \n You can type 'restart' to go back to the beginning. \
+                               \n Please type 'exit' to leave TCGScraper!")
+        if game_rq == "restart":
+            continue
+        elif game_rq == "exit":
+            break
 
-            # Printing resulting numerical game list
-            i = 1
-            for title in titles:
-                print("{}. {}".format(i, title))
-                i+=1 
+        print(f"\n\nYou chose game {next(iter(game_rq))}, Id #: {next(iter(game_rq.values()))}. Great choice!\n\n")
 
-            # User input for requested game
-            game_rqn = int(input("Please choose which game you'd like to scrape: "))
-            game_rq = titles[game_rqn-1]
-            url_rq = urls[game_rqn-1]
-            url_rq = url_rq.lower()
-            print("You chose game {}, {}. Great choice!".format(game_rqn, game_rq))
-            print("Visiting the 'Price Guide' page for {}!".format(game_rq))
-            PG_URL = f"https://www.tcgplayer.com{url_rq}/price-guides"
-
-            # ======================================================================
-            # Stage 2: Navigate to Price guide page and collect set list
-            # ======================================================================
-            page.goto(PG_URL)
-            page.wait_for_load_state("networkidle")
-
-            dd = page.get_by_placeholder("Select a Set")
-            dd_list = dd.get_attribute("aria-controls")
-            set_labels = [item.get_attribute("aria-label") for item in page.locator(f"#{dd_list} li").all()]   
-
-            browser.close()
-
+        # ======================================================================
+        # Stage 2: Navigate to Price guide page and collect set list
+        # ======================================================================
+        set_data = {}
+        set_data_clean = {}
+        set_data = fetch_sets(next(iter(game_rq.values())))
+        if isinstance(set_data, dict):
+            set_data = set_data.get("results", [])
+        for item in set_data:
+            set_data_clean[item.get("name")] = item.get("setNameId")
+        print(f"Visiting the 'Price Guide' page for {next(iter(game_rq))}!")
         # ======================================================================
         # Stage 3: Ask user if they want to see the list or type for autocomplete
         # Once selected, fix URL and ask what scraping type they want
         # ======================================================================
-    
         # Forces user to choose, list or restart. Prevents bad input
-        set_rq = ""
-        set_rq = usr_set_input(set_labels, "Please choose which set you'd like to scrape: \
+        set_rq = usr_set_input(set_data_clean, "Please choose which set you'd like to scrape: \
                                \n You can type 'list to see the full list or 'restart' to go back to the beginning. \
                                \n Please type 'exit' to leave TCGScraper!")
         if set_rq == "restart":
             continue
         elif set_rq == "exit":
             break
-        print("You chose set: {}. Great choice!".format(set_rq))
-            
-        # print("Visiting the 'Price Guide' page for set {}!".format(set_rq))
-        set_rqf = set_rq
-        set_rqf = set_rqf.replace(":", "")
-        set_rqf = set_rqf.replace(" ", "-")
-        set_rqf = set_rqf.lower()
-        SET_URL = f"https://www.tcgplayer.com{url_rq}/price-guides/{set_rqf}"
+        print(f"You chose set: {next(iter(set_rq))}, ID #: {next(iter(set_rq.values()))}. Great choice!")
 
         # ======================================================================
         # Stage 4: Navigate to Price guide page for set and scrape card, url data
         # ======================================================================
-        with sync_playwright() as pw:
-            card_names = []
-            card_urls = []
-            product_ids = []
-            browser = pw.chromium.launch(headless=True, args=["--window-size=640,640"])
-            page = browser.new_page()
-            stealth_config = Stealth()
-            stealth_config.apply_stealth_sync(page)
-            page.goto(SET_URL)
-            page.wait_for_load_state("networkidle")
+        print("Gathering all cards and their product pages in your desired set \n \
+            This might take a minute!")
+        
+        card_data = {}
+        card_data_clean = {}
+        card_names = []
+        product_ids = []
 
-            page.get_by_label("Sort Number column by ascending").click()
-            page.wait_for_load_state("networkidle")
-
-            print("Gathering all cards and their product pages in your desired set \n \
-                This might take a minute!")
-            
-            product_links = page.locator("tbody.tcg-table-body a.pdp-url")
-            for i in range(product_links.count()):
-                link = product_links.nth(i)
-                card_names.append(link.inner_text().strip())
-                # titles.sort() # unnecessary for now
-                url = link.get_attribute("href")
-                match = re.search(r'/product/(\d+)', url)
-                if match:
-                    product_ids.append(int(match.group(1)))
-                card_urls.append(url)
-                # print(data)   # Debug
-
-            # page.pause()      # Debug
-            browser.close()
-
-        # ======================================================================
+        card_data = fetch_cards(next(iter(set_rq.values())))
+        if isinstance(card_data, dict):
+            card_data = card_data.get("results", [])
+        for item in card_data:
+            card_data_clean[item.get("productName")] = item.get("productID")
+        # print(card_data_clean)    # Debug
+        card_names = list(card_data_clean)
+        product_ids = list(card_data_clean.values())
+        
+        if not card_names:
+            print("No cards found in this set. Please choose another set.")
+            continue
         # Stage 5: Do logic and some more user input based on previous selection
         # ======================================================================
         # Initial ask on scraping method
@@ -134,7 +100,6 @@ def main():
             choices = opts
         ).ask()
 
-        url_list = []
         card_list = []
         product_id_list = []
         # Prompt which cards and create short list of desired cards
@@ -151,7 +116,6 @@ def main():
             # Creating proper list of card names/urls/ids
             for card in card_list:
                 i = card_names.index(card)
-                url_list.append(card_urls[i])
                 product_id_list.append(product_ids[i])
 
         # Prompt which cards and create short(er) list with prompted cards removed
@@ -165,19 +129,16 @@ def main():
                 \n Type 'save' to save a file of cards you've already selected"
             cards_exclude = usr_card_input(card_names, prompt)
             card_list = card_names
-            url_list = card_urls
             product_id_list = product_ids
             
             # Creating proper list of card names/urls/ids
             for card in cards_exclude:
                 i = card_names.index(card)
                 card_list.pop(i)
-                url_list.pop(i)
                 product_id_list.pop(i)
         # Basically do nothing beceause user wants whole list    
         else:
             card_list = card_names
-            url_list = card_urls
             product_id_list = product_ids
 
         # Final display, need to add option to restart back at the card choosing
@@ -191,24 +152,31 @@ def main():
         all_card_data = {}
         first_listing_data = []
         max_listings = 50
-        for product_id, card_name in track(
-            zip(product_id_list, card_list),
-            description="Scraping cards...",
-            total=len(card_list)
-            ):
-            
-            print(f"Processing: {card_name} (ID: {product_id})...")
-            
-            raw_listings = fetch_listings(product_id, max_listings)
-            cleaned_listings = extract_key_chars(raw_listings)
+        max_workers = min(8, len(product_id_list)) if product_id_list else 1
 
-            all_card_data[product_id] = {
-                "card_info": {
-                    "name": card_name,
-                    "total_active_listings": len(cleaned_listings)
-                },
-                "market_listings": cleaned_listings
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_card = {
+                executor.submit(fetch_listings, product_id, max_listings): (product_id, card_name)
+                for product_id, card_name in zip(product_id_list, card_list)
             }
+
+            for future in track(as_completed(future_to_card), description="Scraping cards...", total=len(future_to_card)):
+                product_id, card_name = future_to_card[future]
+                print(f"Processing: {card_name} (ID: {product_id})...")
+                try:
+                    raw_listings = future.result()
+                except Exception as exc:
+                    print(f"Error fetching listings for {card_name} ({product_id}): {exc}")
+                    raw_listings = []
+
+                cleaned_listings = extract_key_chars(raw_listings)
+                all_card_data[product_id] = {
+                    "card_info": {
+                        "name": card_name,
+                        "total_active_listings": len(cleaned_listings)
+                    },
+                    "market_listings": cleaned_listings
+                }
 
         # Create listing of just first listing for each card to show user before optimization
         for product_id, card_data in all_card_data.items():
@@ -240,12 +208,93 @@ def main():
 
 ###############################################################################
 
+# Fetches list of games (product lines) from the Search API
+def fetch_categories():
+    url = "https://mp-search-api.tcgplayer.com/v1/search/productLines"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.tcgplayer.com",
+        "Referer": "https://www.tcgplayer.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site"
+    }
+
+    with sync_playwright() as p:
+        request_context = p.request.new_context()
+        
+        response = request_context.get(url, headers=headers)
+        
+        if not response.ok:
+            print(f"Failed to fetch categories: {response.status}")
+            return []
+
+        # The API returns a list of objects: [{"productLineId": 1, "productLineName": "Magic...", ...}]
+        return response.json()
+
+# Fetches list of active sets from the Search API 
+def fetch_sets(gameID):
+    url = f"https://mpapi.tcgplayer.com/v2/Catalog/SetNames?categoryId={gameID}&active=true&mpfev=5154"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.tcgplayer.com",
+        "Referer": "https://www.tcgplayer.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site"
+    }
+
+    with sync_playwright() as p:
+        request_context = p.request.new_context()
+        
+        response = request_context.get(url, headers=headers)
+        
+        if not response.ok:
+            print(f"Failed to fetch sets: {response.status}")
+            return []
+
+        data = response.json()
+        if isinstance(data, dict):
+            return data.get("results", [])
+        return data
+
+# Fetches list of cards from set requested over API
+def fetch_cards(setID):
+    url = f"https://infinite-api.tcgplayer.com/priceguide/set/{setID}/cards/?rows=5000"
+    print(url)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.tcgplayer.com",
+        "Referer": "https://www.tcgplayer.com/",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site"
+    }
+
+    with sync_playwright() as p:
+        request_context = p.request.new_context()
+        
+        response = request_context.get(url, headers=headers)
+        
+        if not response.ok:
+            print(f"Failed to fetch cards: {response.status}")
+            return []
+
+        data = response.json()
+        if isinstance(data, dict):
+            return data.get("result", data.get("results", []))
+        return data
+
 # New API call version of getting card listing data
-def fetch_listings(product_id, max_listings=None):
+def fetch_listings(product_id, max_listings=None, session=None):
     # The API endpoint identified in the HAR file
     url = f"https://mp-search-api.tcgplayer.com/v1/product/{product_id}/listings"
-    
-    # Headers mimicking the browser request from the HAR file
+
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
@@ -253,21 +302,22 @@ def fetch_listings(product_id, max_listings=None):
         "Referer": "https://www.tcgplayer.com/",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko/20100101 Firefox/149.0"
     }
-    
+
     all_listings = []
     offset = 0
-    size = 50 # Fetching 50 listings per request
-    
-    with sync_playwright() as p:
-        # We use an APIRequestContext for direct HTTP requests without loading a full browser page
-        request_context = p.request.new_context()
-        
+    size = 50 if not max_listings else min(50, max_listings)
+
+    if session is None:
+        session = requests.Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
         while True:
-            # Check if we've already fetched enough listings
             if max_listings and len(all_listings) >= max_listings:
                 break
-            
-            # Payload replicated from the HAR file, dynamically updating 'from' and 'size'
+
             payload = {
                 "filters": {
                     "term": {"sellerStatus": "Live", "channelId": 0},
@@ -280,41 +330,37 @@ def fetch_listings(product_id, max_listings=None):
                 "context": {"shippingCountry": "US", "cart": {"packages": {}}},
                 "aggregations": ["listingType"]
             }
-            
-            print(f"Fetching listings {offset} to {offset + size}...")
-            response = request_context.post(url, headers=headers, data=payload)
-            
+
+            print(f"Fetching listings {offset} to {offset + size} for product {product_id}...")
+            response = session.post(url, headers=headers, json=payload, timeout=15)
+
             if not response.ok:
-                print(f"Failed to fetch: {response.status} {response.status_text}")
+                print(f"Failed to fetch: {response.status_code} {response.text}")
                 break
-                
+
             data = response.json()
-            
-            # Defensive check to ensure the expected JSON structure exists
             if "results" not in data or not data["results"]:
                 break
-                
-            # The listings are nested inside the first result object
+
             result_set = data["results"][0]
             listings = result_set.get("results", [])
-            
             if not listings:
                 break
-            
-            # Only add listings up to the max_listings limit
+
             if max_listings:
-                listings_to_add = listings[:max_listings - len(all_listings)]
+                listings_to_add = listings[: max_listings - len(all_listings)]
                 all_listings.extend(listings_to_add)
             else:
                 all_listings.extend(listings)
-            
-            # If the API returns fewer listings than our size limit, we've reached the last page
+
             if len(listings) < size:
                 break
-                
-            # Increment the offset for the next page
+
             offset += size
-            
+    finally:
+        if close_session:
+            session.close()
+
     return all_listings
 
 # Extracts key (needed) characteristics from each listing on cards
@@ -449,15 +495,40 @@ def _centered_file_dialog(dialog_type, **options):
     else:
         return crossfiledialog.save_file(title=options.get('title', 'Choose where to save your list'))
 
+# Function to display a passed list and prompt and return user input
+def usr_game_input(game_labels, prompt):    
+    while True:
+        game_rq = questionary.autocomplete(
+            prompt,
+            choices = list(game_labels)
+        ).ask()
+
+        # Gives option to restart (i.e. select another game)
+        if game_rq.lower() == "restart":
+            return "restart"
+        # Gives option to exit
+        elif game_rq.lower() == "exit":
+            return "exit"
+        # Prevents bad/empty input
+        elif game_rq == "" or (game_rq not in game_labels):
+            print("You must choose a game, please type your desired game or type restart to start over")
+        elif game_rq in list(game_labels):
+            out = {}
+            out[game_rq] = game_labels[game_rq]
+            return out
+
 # Function to display passed list and allow user to continue to add to it until 'done'
 def usr_card_input(card_names, prompt):
     done = 0
     cardlist = []
     while not done:
-        temp = questionary.autocomplete(
-            prompt,
-            choices = card_names
-        ).ask()
+        if card_names:
+            temp = questionary.autocomplete(
+                prompt,
+                choices = card_names
+            ).ask()
+        else:
+            temp = questionary.text(prompt).ask()
         if temp.lower() == 'done':
             done = 1
         elif temp.lower() == 'list':
@@ -508,18 +579,18 @@ def usr_card_input(card_names, prompt):
     return cardlist
 
 # Function to display a passed list and prompt and return user input
-def usr_set_input(set_labels, prompt):    
+def usr_set_input(set_data_clean, prompt):    
     while True:
         set_rq = questionary.autocomplete(
             prompt,
-            choices = set_labels
+            choices = list(set_data_clean)
         ).ask()
 
         # Gives option to list all sets
         if set_rq.lower() == "list":
         # Printing resulting numerical set list
-            for i in range(len(set_labels)):
-                print("{}. {}".format(i+1, set_labels[i]))
+            for key, i in zip(set_data_clean, range(len(set_data_clean))):
+                print(f"{i+1}. {key}")
             continue
         # Gives option to restart (i.e. select another game)
         elif set_rq.lower() == "restart":
@@ -528,10 +599,12 @@ def usr_set_input(set_labels, prompt):
         elif set_rq.lower() == "exit":
             return "exit"
         # Prevents bad/empty input
-        elif set_rq == "" or (set_rq not in set_labels):
+        elif set_rq == "" or (set_rq not in set_data_clean):
             print("You must choose a set, please type your desired set or type restart to start over")
-        elif set_rq in set_labels:
-            return set_rq
+        elif set_rq in list(set_data_clean):
+            out = {}
+            out[set_rq] = set_data_clean[set_rq]
+            return out
 
 if __name__ == "__main__":
     main()
