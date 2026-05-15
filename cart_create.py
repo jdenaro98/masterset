@@ -41,13 +41,15 @@ def create_cart(optimized_cart):
         }])
 
         # 3: Add all items to cart using new cartKey
+        # Accounts for listings with/without pictures due to structural differences
+        # in the payload/add_url delivery
         for item in optimized_cart:
-            # listing_id = item.get('listing_id')
-            # seller_id = item.get('seller_id')
-            parts = item.get('test_id_attr').split('-')
+            sku = item.get('sku')
+            seller_key = item.get('sellerKey')
             custom_listing_key = item.get('custom_listing_key')
-            if len(parts) == 3:
+            if custom_listing_key and custom_listing_key != "No Picture Linked":
                 add_url = f"https://mpgateway.tcgplayer.com/v1/cart/{cart_key}/listo/add?mpfev=5143"
+                # Payload for listing with pictures
                 payload = {
                     "customListingKey": custom_listing_key, # Scrape this from the listing container
                     "priceAtAdd": 0,
@@ -58,10 +60,10 @@ def create_cart(optimized_cart):
             else:
                 add_url = f"https://mpgateway.tcgplayer.com/v1/cart/{cart_key}/item/add?mpfev=5143"
             
-                # This payload matches the successful POST in 'add to cart_2.har'
+                # Payload for regular listing without pictures
                 payload = {
-                    "sku": int(parts[0]),       # Extracted from test_id_attr
-                    "sellerKey": parts[1],        # The API accepts an empty string if not specified
+                    "sku": sku,       # Extracted from listing
+                    "sellerKey": seller_key,        # The API accepts an empty string if not specified
                     "channelId": 0,         # 0 is the default channel for the main marketplace
                     "requestedQuantity": 1, # Note the specific field name 'requestedQuantity'
                     "price": 0,             # Can be 0; the server validates current price on the backend
