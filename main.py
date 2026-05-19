@@ -79,7 +79,7 @@ def main():
         card_names = []
         product_ids = []
 
-        card_data = fetch_cards(next(iter(set_rq.values())))
+        card_data = fetch_cards(next(iter(set_rq.values())), next(iter(game_rq.values())))
         if isinstance(card_data, dict):
             card_data = card_data.get("results", [])
         for item in card_data:
@@ -263,9 +263,10 @@ def fetch_sets(gameID):
         return data
 
 # Fetches list of cards from set requested over API
-def fetch_cards(setID):
-    url = f"https://infinite-api.tcgplayer.com/priceguide/set/{setID}/cards/?rows=5000"
-    print(url)
+def fetch_cards(setID, gameID):
+
+    pdurl = f"https://mpapi.tcgplayer.com/v2/Product/ProductTypes/{gameID}/?mpfev=5154"
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
         "Accept": "application/json, text/plain, */*",
@@ -277,8 +278,30 @@ def fetch_cards(setID):
     }
 
     with sync_playwright() as p:
+        # First get product ID types for set
         request_context = p.request.new_context()
         
+        response = request_context.get(pdurl, headers=headers)
+        
+        data = response.json()
+        pdID = None
+        if isinstance(data, dict):
+            results = data.get("results", [])
+            pdID = next(
+                (item.get("productTypeId") for item in results
+                if item.get("productName") == "Cards"),
+                None
+            )
+
+        if pdID is None:
+            print(f"Failed to fetch productTypeId for set {setID}")
+            return []
+
+        print(pdID)
+        # Then construct actual price guide url with that info
+        url = f"https://infinite-api.tcgplayer.com/priceguide/set/{setID}/cards/?rows=5000&productTypeID={pdID}"
+        print(url)
+
         response = request_context.get(url, headers=headers)
         
         if not response.ok:
