@@ -10,43 +10,121 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 def main():
+    print("==================================")
+    print("Welcome to the TCGPlayer Scraper!")
+    print("==================================")
+    print(".\n.\n.\n")
+    print("Gathering a list of TCG Games...")
+
+    game_data = {}
+    categories_data = fetch_categories()
+    for item in categories_data:
+        game_data[item.get("productLineName")] = item.get("productLineId")
+    game_data = dict(sorted(game_data.items()))
+
+    pending_selections = []
+
     while True:
-        print("==================================")
-        print("Welcome to the TCGPlayer Scraper!")
-        print("==================================")
-        print(".\n.\n.\n")
-        print("Gathering a list of TCG Games...")
+        selection = collect_selection(game_data, has_prior=bool(pending_selections))
+        if selection == "exit":
+            return
+        if selection == "done":
+            break
 
-        # ======================================================================
-        # Stage 1: Navigate to Categories Page and collect Games list
-        # ======================================================================
-        game_data = {}
-        categories_data = fetch_categories()
+        pending_selections.append(selection)
 
-        # Cleaning to just game name, id
-        for item in categories_data:
-            game_data[item.get("productLineName")] = item.get("productLineId")
-        game_data = dict(sorted(game_data.items()))
-        # Printing output
+        if not questionary.confirm("Add cards from another set to optimize together?").ask():
+            break
+
+    # Build flat task list: (product_id, "Card Name [Set Name]")
+    tasks = [
+        (product_id, f"{card_name} [{selection['set_name']}]")
+        for selection in pending_selections
+        for product_id, card_name in zip(selection["product_id_list"], selection["card_list"])
+    ]
+
+    if not tasks:
+        print("No cards selected. Exiting.")
+        return
+
+    all_card_data = {}
+    first_listing_data = []
+    max_listings = 50
+    max_workers = min(8, len(tasks))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_card = {
+            executor.submit(fetch_listings, product_id, max_listings): (product_id, display_name)
+            for product_id, display_name in tasks
+        }
+
+        for future in track(as_completed(future_to_card), description="Scraping cards...", total=len(future_to_card)):
+            product_id, display_name = future_to_card[future]
+            print(f"Processing: {display_name} (ID: {product_id})...")
+            try:
+                raw_listings = future.result()
+            except Exception as exc:
+                print(f"Error fetching listings for {display_name} ({product_id}): {exc}")
+                raw_listings = []
+
+            cleaned_listings = extract_key_chars(raw_listings)
+            all_card_data[product_id] = {
+                "card_info": {
+                    "name": display_name,
+                    "total_active_listings": len(cleaned_listings)
+                },
+                "market_listings": cleaned_listings
+            }
+
+    for product_id, card_data in all_card_data.items():
+        card_name = card_data["card_info"]["name"]
+        listings = card_data["market_listings"]
+        if listings:
+            first_entry = listings[0].copy()
+            first_entry['card'] = card_name
+            first_listing_data.append(first_entry)
+        else:
+            print(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
+
+    print_cart(first_listing_data, "\nFirst Listings:\n")
+
+    optimized_cart = optimizer.optimize(all_card_data)
+    print_cart(optimized_cart, "\nOptimized Cart:\n")
+
+    if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
+        cookie_export_path = cart_create.create_cart(optimized_cart)
+        if cookie_export_path:
+            print(f"Cart cookies exported to: {cookie_export_path}")
+        else:
+            print("Cart creation finished, but cookie export was not completed.")
+
+
+def collect_selection(game_data, has_prior=False):
+    """Runs game→set→card selection for one set slot.
+    Returns {"set_name", "card_list", "product_id_list"}, "exit", or "done".
+    """
+    while True:
+        print("\n" + "=" * 40)
         for item, i in zip(game_data, range(len(game_data))):
             print(f"{i+1}. {item}")
 
-        # User input for requested game
-        game_rq = {}
-        game_rq = usr_game_input(game_data, "Please choose which game you'd like to scrape: \
-                               \n You can type 'restart' to go back to the beginning. \
-                               \n Please type 'exit' to leave TCGScraper!")
+        done_hint = "\n You can type 'done' to skip to optimization with your current selections." if has_prior else ""
+        game_rq = usr_game_input(
+            game_data,
+            "Please choose which game you'd like to scrape: "
+            "\n You can type 'restart' to go back to the beginning. "
+            "\n Please type 'exit' to leave TCGScraper!"
+            + done_hint
+        )
         if game_rq == "restart":
             continue
         elif game_rq == "exit":
-            break
+            return "exit"
+        elif game_rq == "done":
+            return "done"
 
-        print(f"\n\nYou chose game {next(iter(game_rq))}, Id #: {next(iter(game_rq.values()))}. Great choice!\n\n")
+        print(f"\nYou chose game {next(iter(game_rq))}, Id #: {next(iter(game_rq.values()))}. Great choice!\n")
 
-        # ======================================================================
-        # Stage 2: Navigate to Price guide page and collect set list
-        # ======================================================================
-        set_data = {}
         set_data_clean = {}
         set_data = fetch_sets(next(iter(game_rq.values())))
         if isinstance(set_data, dict):
@@ -54,164 +132,98 @@ def main():
         for item in set_data:
             set_data_clean[item.get("name")] = item.get("setNameId")
         print(f"Visiting the 'Price Guide' page for {next(iter(game_rq))}!")
-        # ======================================================================
-        # Stage 3: Ask user if they want to see the list or type for autocomplete
-        # Once selected, fix URL and ask what scraping type they want
-        # ======================================================================
-        # Forces user to choose, list or restart. Prevents bad input
-        set_rq = usr_set_input(set_data_clean, "Please choose which set you'd like to scrape: \
-                               \n You can type 'list to see the full list or 'restart' to go back to the beginning. \
-                               \n Please type 'exit' to leave TCGScraper!")
+
+        set_rq = usr_set_input(
+            set_data_clean,
+            "Please choose which set you'd like to scrape: "
+            "\n You can type 'list' to see the full list or 'restart' to go back to the beginning. "
+            "\n Please type 'exit' to leave TCGScraper!"
+        )
         if set_rq == "restart":
             continue
         elif set_rq == "exit":
-            break
-        print(f"You chose set: {next(iter(set_rq))}, ID #: {next(iter(set_rq.values()))}. Great choice!")
+            return "exit"
 
-        # ======================================================================
-        # Stage 4: Navigate to Price guide page for set and scrape card, url data
-        # ======================================================================
-        print("Gathering all cards and their product pages in your desired set \n \
-            This might take a minute!")
-        
-        card_data = {}
+        set_name = next(iter(set_rq))
+        print(f"You chose set: {set_name}, ID #: {next(iter(set_rq.values()))}. Great choice!")
+
+        print("Gathering all cards and their product pages in your desired set\n    This might take a minute!")
+
         card_data_clean = {}
-        card_names = []
-        product_ids = []
-
         card_data = fetch_cards(next(iter(set_rq.values())), next(iter(game_rq.values())))
         if isinstance(card_data, dict):
             card_data = card_data.get("results", [])
         for item in card_data:
             card_data_clean[item.get("productName")] = item.get("productID")
-        # print(card_data_clean)    # Debug
+
         card_names = list(card_data_clean)
         product_ids = list(card_data_clean.values())
-        
+
         if not card_names:
             print("No cards found in this set. Please choose another set.")
             continue
-        # Stage 5: Do logic and some more user input based on previous selection
-        # ======================================================================
-        # Initial ask on scraping method
-        opts = ["1. Inclusive (type a list of card numbers you want data on)", "2. Exclusive (you want the whole set except a few card numbers)", "3. All Cards Please!"]
+
+        opts = [
+            "1. Inclusive (type a list of card numbers you want data on)",
+            "2. Exclusive (you want the whole set except a few card numbers)",
+            "3. All Cards Please!"
+        ]
         scrape_choice = questionary.select(
             "Please Choose an option for how you'd like to scrape your card data",
-            choices = opts
+            choices=opts
         ).ask()
 
         card_list = []
         product_id_list = []
-        # Prompt which cards and create short list of desired cards
-        # Eventaully make it even fanci and allow file uploading (don't know what format)
-        if scrape_choice == opts[0]:
-            prompt = "Please search for and enter the cards you'd like to scrape. \
-                \n Type 'done' to complete your list. \
-                \n Type 'list' to show your current list \
-                \n Type 'full' to see the full card list \
-                \n Type 'load' to load a file of cards you've already selected \
-                \n Type 'save' to save a file of cards you've already selected"
-            card_list = usr_card_input(card_names, prompt)
 
-            # Creating proper list of card names/urls/ids
+        if scrape_choice == opts[0]:
+            prompt = (
+                "Please search for and enter the cards you'd like to scrape."
+                "\n Type 'done' to complete your list."
+                "\n Type 'list' to show your current list"
+                "\n Type 'full' to see the full card list"
+                "\n Type 'load' to load a file of cards you've already selected"
+                "\n Type 'save' to save a file of cards you've already selected"
+            )
+            card_list = usr_card_input(card_names, prompt)
             for card in card_list:
                 i = card_names.index(card)
                 product_id_list.append(product_ids[i])
 
-        # Prompt which cards and create short(er) list with prompted cards removed
-        # Eventually make fancy as above
         elif scrape_choice == opts[1]:
-            prompt = "Please search for and enter the cards you'd like to exclude from the full set scrape \
-                \n Type 'done' to complete your list. \
-                \n Type 'list' to show your current list \
-                \n Type 'full' to see the full card list \
-                \n Type 'load' to load a file of cards you've already selected \
-                \n Type 'save' to save a file of cards you've already selected"
+            prompt = (
+                "Please search for and enter the cards you'd like to exclude from the full set scrape."
+                "\n Type 'done' to complete your list."
+                "\n Type 'list' to show your current list"
+                "\n Type 'full' to see the full card list"
+                "\n Type 'load' to load a file of cards you've already selected"
+                "\n Type 'save' to save a file of cards you've already selected"
+            )
             cards_exclude = usr_card_input(card_names, prompt)
-            card_list = card_names
-            product_id_list = product_ids
-            
-            # Creating proper list of card names/urls/ids
+            card_list = list(card_names)
+            product_id_list = list(product_ids)
             for card in cards_exclude:
-                i = card_names.index(card)
+                i = card_list.index(card)
                 card_list.pop(i)
                 product_id_list.pop(i)
-        # Basically do nothing beceause user wants whole list    
+
         else:
-            card_list = card_names
-            product_id_list = product_ids
+            card_list = list(card_names)
+            product_id_list = list(product_ids)
 
-        # Final display, need to add option to restart back at the card choosing
-        print("Your final card list looks like:")
+        print(f"\nYour final card list for [{set_name}]:")
         for card in card_list:
-            print(card)
+            print(f"  {card}")
 
-        # ======================================================================
-        # Stage 6: Scrape data from card list
-        # ======================================================================
-        all_card_data = {}
-        first_listing_data = []
-        max_listings = 50
-        max_workers = min(8, len(product_id_list)) if product_id_list else 1
+        return {"set_name": set_name, "card_list": card_list, "product_id_list": product_id_list}
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_card = {
-                executor.submit(fetch_listings, product_id, max_listings): (product_id, card_name)
-                for product_id, card_name in zip(product_id_list, card_list)
-            }
-
-            for future in track(as_completed(future_to_card), description="Scraping cards...", total=len(future_to_card)):
-                product_id, card_name = future_to_card[future]
-                print(f"Processing: {card_name} (ID: {product_id})...")
-                try:
-                    raw_listings = future.result()
-                except Exception as exc:
-                    print(f"Error fetching listings for {card_name} ({product_id}): {exc}")
-                    raw_listings = []
-
-                cleaned_listings = extract_key_chars(raw_listings)
-                all_card_data[product_id] = {
-                    "card_info": {
-                        "name": card_name,
-                        "total_active_listings": len(cleaned_listings)
-                    },
-                    "market_listings": cleaned_listings
-                }
-
-        # Create listing of just first listing for each card to show user before optimization
-        for product_id, card_data in all_card_data.items():
-            card_name = card_data["card_info"]["name"]
-            listings = card_data["market_listings"]
-            if listings:  # Check if there are any listings at all
-                # Create a copy or a new dict with the card name included for reference
-                first_entry = listings[0].copy()
-                first_entry['card'] = card_name
-                first_listing_data.append(first_entry)
-            else:
-                # Optional: Handle cards with no listings
-                print(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
-
-        print_cart(first_listing_data, "\nFirst Listings:\n")
-
-        optimized_cart = optimizer.optimize(all_card_data)
-
-        print_cart(optimized_cart, "\nOptimized Cart:\n")
-        
-        if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
-            cookie_export_path = cart_create.create_cart(optimized_cart)
-            if cookie_export_path:
-                print(f"Cart cookies exported to: {cookie_export_path}")
-            else:
-                print("Cart creation finished, but cookie export was not completed.")
-
-        break
 
 ###############################################################################
 
 # Fetches list of games (product lines) from the Search API
 def fetch_categories():
     url = "https://mp-search-api.tcgplayer.com/v1/search/productLines"
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0",
         "Accept": "application/json, text/plain, */*",
@@ -224,9 +236,9 @@ def fetch_categories():
 
     with sync_playwright() as p:
         request_context = p.request.new_context()
-        
+
         response = request_context.get(url, headers=headers)
-        
+
         if not response.ok:
             print(f"Failed to fetch categories: {response.status}")
             return []
@@ -234,7 +246,7 @@ def fetch_categories():
         # The API returns a list of objects: [{"productLineId": 1, "productLineName": "Magic...", ...}]
         return response.json()
 
-# Fetches list of active sets from the Search API 
+# Fetches list of active sets from the Search API
 def fetch_sets(gameID):
     url = f"https://mpapi.tcgplayer.com/v2/Catalog/SetNames?categoryId={gameID}&active=true&mpfev=5154"
 
@@ -250,9 +262,9 @@ def fetch_sets(gameID):
 
     with sync_playwright() as p:
         request_context = p.request.new_context()
-        
+
         response = request_context.get(url, headers=headers)
-        
+
         if not response.ok:
             print(f"Failed to fetch sets: {response.status}")
             return []
@@ -280,9 +292,9 @@ def fetch_cards(setID, gameID):
     with sync_playwright() as p:
         # First get product ID types for set
         request_context = p.request.new_context()
-        
+
         response = request_context.get(pdurl, headers=headers)
-        
+
         data = response.json()
         pdID = None
         if isinstance(data, dict):
@@ -303,7 +315,7 @@ def fetch_cards(setID, gameID):
         print(url)
 
         response = request_context.get(url, headers=headers)
-        
+
         if not response.ok:
             print(f"Failed to fetch cards: {response.status}")
             return []
@@ -467,7 +479,7 @@ def print_cart(cart, title):
 def shipping_calc(cart):
     """
     Calculates total shipping cost based on seller-specific thresholds.
-    If 'shipping_deal' is True and the sum of card prices from a specific 
+    If 'shipping_deal' is True and the sum of card prices from a specific
     seller is >= $5.00, shipping for that seller becomes $0.00.
     """
     seller_totals = {}
@@ -475,7 +487,7 @@ def shipping_calc(cart):
     FREE_SHIPPING_THRESHOLD = 5.00
 
     # 1. Aggregate card prices and shipping per seller
-    # We use seller_id as the primary key to ensure we don't mix up 
+    # We use seller_id as the primary key to ensure we don't mix up
     # different sellers with the same/similar names.
     for item in cart:
         sid = item.get('seller_id') or item.get('seller')
@@ -485,16 +497,16 @@ def shipping_calc(cart):
                 'shipping_cost': 0.0,
                 'has_deal': False
             }
-        
+
         price_val = item.get('price')
         seller_totals[sid]['items_price'] += price_val if price_val is not None else 0.0
-        
-        # We assume the shipping cost is consistent across items from the same seller 
+
+        # We assume the shipping cost is consistent across items from the same seller
         # for a single order, so we track the highest shipping fee encountered for that seller.
         ship_val = item.get('shipping') or 0.0
         if ship_val > seller_totals[sid]['shipping_cost']:
             seller_totals[sid]['shipping_cost'] = ship_val
-            
+
         # If any item from this seller indicates a shipping deal exists
         if item.get('shipping_deal') or False:
             seller_totals[sid]['has_deal'] = True
@@ -519,7 +531,7 @@ def _centered_file_dialog(dialog_type, **options):
         return crossfiledialog.save_file(title=options.get('title', 'Choose where to save your list'))
 
 # Function to display a passed list and prompt and return user input
-def usr_game_input(game_labels, prompt):    
+def usr_game_input(game_labels, prompt):
     while True:
         game_rq = questionary.autocomplete(
             prompt,
@@ -532,6 +544,9 @@ def usr_game_input(game_labels, prompt):
         # Gives option to exit
         elif game_rq.lower() == "exit":
             return "exit"
+        # Gives option to skip to optimization with already-queued selections
+        elif game_rq.lower() == "done":
+            return "done"
         # Prevents bad/empty input
         elif game_rq == "" or (game_rq not in game_labels):
             print("You must choose a game, please type your desired game or type restart to start over")
@@ -602,7 +617,7 @@ def usr_card_input(card_names, prompt):
     return cardlist
 
 # Function to display a passed list and prompt and return user input
-def usr_set_input(set_data_clean, prompt):    
+def usr_set_input(set_data_clean, prompt):
     while True:
         set_rq = questionary.autocomplete(
             prompt,

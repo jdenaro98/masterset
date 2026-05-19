@@ -24,7 +24,9 @@ def create_cart(optimized_cart):
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--disable-notifications",
-                "--disable-features=TranslateUI"
+                "--disable-features=TranslateUI",
+                # "--force-devices-scale-factor=1",
+                "--disable-gpu"     # Helps with laggy rendering on mac
             ]
         )
         context = browser.new_context()
