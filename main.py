@@ -1,6 +1,6 @@
 from playwright.sync_api import sync_playwright, expect
 from playwright_stealth.stealth import Stealth
-import questionary, re, time, sys, os, subprocess
+import questionary, re, time, sys, os, subprocess, curses
 from urllib.parse import parse_qs, urlparse
 import crossfiledialog
 import optimizer
@@ -29,7 +29,7 @@ def main():
     pending_selections = []
 
     while True:
-        selection = collect_selection(game_data, has_prior=bool(pending_selections))
+        selection = _collect_selection(game_data, has_prior=bool(pending_selections))
         if selection == "exit":
             return
         if selection == "done":
@@ -80,7 +80,7 @@ def main():
                     theme.muted(f"Error fetching listings for {display_name} ({product_id}): {exc}")
                     raw_listings = []
 
-                cleaned_listings = extract_key_chars(raw_listings)
+                cleaned_listings = _extract_key_chars(raw_listings)
                 all_card_data[product_id] = {
                     "card_info": {
                         "name": display_name,
@@ -90,6 +90,7 @@ def main():
                 }
                 progress.advance(task_id)
 
+    # Gathering first listing of each card data
     for product_id, card_data in all_card_data.items():
         card_name = card_data["card_info"]["name"]
         listings = card_data["market_listings"]
@@ -100,10 +101,11 @@ def main():
         else:
             theme.muted(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
 
-    print_cart(first_listing_data, "\nFirst Listings:\n")
-
+    # TODO: Eventually run multiple permutations so the user can live see
+    # changes in total/shipping cost if they don't care about condition, or
+    # having verified sellers
     optimized_cart = optimizer.optimize(all_card_data)
-    print_cart(optimized_cart, "\nOptimized Cart:\n")
+    _print_carts_side_by_side(first_listing_data, "\nFirst Listings:\n", optimized_cart, "\nOptimized Cart:\n")
 
     if questionary.confirm("Open browser and add the optimized items to cart using Playwright?", style=theme.qs_style()).ask():
         cookie_export_path = cart_create.create_cart(optimized_cart)
@@ -112,18 +114,15 @@ def main():
         else:
             theme.muted("Cart creation finished, but cookie export was not completed.")
 
-
-def collect_selection(game_data, has_prior=False):
+################################################################################
+# Helper Functions
+def _collect_selection(game_data, has_prior=False):
     """Runs game→set→card selection for one set slot.
     Returns {"set_name", "card_list", "product_id_list"}, "exit", or "done".
     """
     while True:
-        theme.header("\n" + "=" * 40)
-        for item, i in zip(game_data, range(len(game_data))):
-            theme.info(f"{i+1}. {item}")
-
         done_hint = "\n You can type 'done' to skip to optimization with your current selections." if has_prior else ""
-        game_rq = usr_game_input(
+        game_rq = _usr_game_input(
             game_data,
             "Please choose which game you'd like to scrape: "
             "\n You can type 'restart' to go back to the beginning. "
@@ -147,7 +146,7 @@ def collect_selection(game_data, has_prior=False):
             set_data_clean[item.get("name")] = item.get("setNameId")
         theme.info(f"Visiting the 'Price Guide' page for {next(iter(game_rq))}!")
 
-        set_rq = usr_set_input(
+        set_rq = _usr_set_input(
             set_data_clean,
             "Please choose which set you'd like to scrape: "
             "\n You can type 'list' to see the full list or 'restart' to go back to the beginning. "
@@ -200,7 +199,7 @@ def collect_selection(game_data, has_prior=False):
                 "\n Type 'load' to load a file of cards you've already selected"
                 "\n Type 'save' to save a file of cards you've already selected"
             )
-            card_list = usr_card_input(card_names, prompt)
+            card_list = _usr_card_input(card_names, prompt)
             for card in card_list:
                 i = card_names.index(card)
                 product_id_list.append(product_ids[i])
@@ -214,7 +213,7 @@ def collect_selection(game_data, has_prior=False):
                 "\n Type 'load' to load a file of cards you've already selected"
                 "\n Type 'save' to save a file of cards you've already selected"
             )
-            cards_exclude = usr_card_input(card_names, prompt)
+            cards_exclude = _usr_card_input(card_names, prompt)
             card_list = list(card_names)
             product_id_list = list(product_ids)
             for card in cards_exclude:
@@ -231,9 +230,6 @@ def collect_selection(game_data, has_prior=False):
             theme.detail(f"  {card}")
 
         return {"set_name": set_name, "card_list": card_list, "product_id_list": product_id_list}
-
-
-###############################################################################
 
 # Fetches list of games (product lines) from the Search API
 def fetch_categories():
@@ -275,19 +271,27 @@ def fetch_sets(gameID):
         "Sec-Fetch-Site": "same-site"
     }
 
-    with sync_playwright() as p:
-        request_context = p.request.new_context()
+    for attempt in range(3):
+        try:
+            with sync_playwright() as p:
+                request_context = p.request.new_context()
+                response = request_context.get(url, headers=headers)
 
-        response = request_context.get(url, headers=headers)
+                if not response.ok:
+                    theme.muted(f"Failed to fetch sets: {response.status}")
+                    return []
 
-        if not response.ok:
-            theme.muted(f"Failed to fetch sets: {response.status}")
-            return []
-
-        data = response.json()
-        if isinstance(data, dict):
-            return data.get("results", [])
-        return data
+                data = response.json()
+                if isinstance(data, dict):
+                    return data.get("results", [])
+                return data
+        except Exception as e:
+            if attempt < 2:
+                theme.muted(f"Connection error fetching sets, retrying... ({e})")
+                time.sleep(2)
+            else:
+                theme.muted(f"Failed to fetch sets after 3 attempts: {e}")
+                return []
 
 # Fetches list of cards from set requested over API
 def fetch_cards(setID, gameID):
@@ -411,7 +415,7 @@ def fetch_listings(product_id, max_listings=None, session=None):
     return all_listings
 
 # Extracts key (needed) characteristics from each listing on cards
-def extract_key_chars(raw_listings):
+def _extract_key_chars(raw_listings):
     """Extracts and formats the relevant fields from the raw API response.
         Can always come back and add more fields as desired when implementing settings"""
     cleaned_listings = []
@@ -465,29 +469,58 @@ def extract_key_chars(raw_listings):
     return cleaned_listings
 
 # Prints sructured dictionary that's sent to it (pre vs post optimization cart)
-def print_cart(cart, title):
+def _print_cart(cart, title):
     theme.header(title)
     sellers = {item['seller'] for item in cart if item.get('seller')}
-    total_price = sum(item.get('price') or 0.0 for item in cart if item.get('price') is not None)
-    total_shipping = shipping_calc(cart)
+    total_price = sum(item.get('price') or 0.0 for item in cart if \
+        item.get('price') is not None)
+    total_shipping = _shipping_calc(cart)
     total_cost = total_price + total_shipping
     theme.info(f"  Unique sellers: {len(sellers)}")
     theme.info(f"  Raw card cost: ${total_price:.2f}")
     theme.info(f"  Shipping Cost: ${total_shipping:.2f}")
     theme.info(f"  Estimated subtotal: ${total_cost:.2f}\n")
-    for item in cart:
-        seller = item.get('seller') or 'N/A'
-        condition = item.get('condition') or 'N/A'
-        price = item.get('price') if item.get('price') is not None else 0.0
-        shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
-        shipping_deal = item.get('shipping_deal') or 'N/A'
-        total = item.get('total') if item.get('total') is not None else 0.0
-        url = item.get('card_url') or 'N/A'
-        card = item.get('card') or 'N/A'
-        theme.detail(f"  - {card} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
+    # for item in cart:
+    #     seller = item.get('seller') or 'N/A'
+    #     condition = item.get('condition') or 'N/A'
+    #     price = item.get('price') if item.get('price') is not None else 0.0
+    #     shipping = item.get('shipping') if item.get('shipping') is not None else 0.0
+    #     shipping_deal = item.get('shipping_deal') or 'N/A'
+    #     total = item.get('total') if item.get('total') is not None else 0.0
+    #     url = item.get('card_url') or 'N/A'
+    #     card = item.get('card') or 'N/A'
+    #     theme.detail(f"  - {card} | {seller} | {condition} | ${price:.2f} | \
+    #         ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
+
+def _print_carts_side_by_side(cart1, title1, cart2, title2):
+    import io
+    from rich.console import Console
+
+    ansi_re = re.compile(r'\x1b\[[^m]*m')
+
+    def capture(cart, title):
+        buf = io.StringIO()
+        tmp = Console(file=buf, force_terminal=True, width=70)
+        old = theme.console
+        theme.console = tmp
+        _print_cart(cart, title)
+        theme.console = old
+        return buf.getvalue().splitlines()
+
+    lines1 = capture(cart1, title1)
+    lines2 = capture(cart2, title2)
+
+    col_w = max((len(ansi_re.sub('', l)) for l in lines1), default=0)
+    n = max(len(lines1), len(lines2))
+    lines1 += [''] * (n - len(lines1))
+    lines2 += [''] * (n - len(lines2))
+
+    for l1, l2 in zip(lines1, lines2):
+        pad = col_w - len(ansi_re.sub('', l1))
+        print(f"{l1}{' ' * pad} | {l2}")
 
 # Shipping price logic on per-seller basis
-def shipping_calc(cart):
+def _shipping_calc(cart):
     """
     Calculates total shipping cost based on seller-specific thresholds.
     If 'shipping_deal' is True and the sum of card prices from a specific
@@ -541,96 +574,266 @@ def _centered_file_dialog(dialog_type, **options):
     else:
         return crossfiledialog.save_file(title=options.get('title', 'Choose where to save your list'))
 
-# Function to display a passed list and prompt and return user input
-def usr_game_input(game_labels, prompt):
-    while True:
-        game_rq = questionary.autocomplete(
-            prompt,
-            choices=list(game_labels),
-            style=theme.qs_style()
-        ).ask()
+def _game_select_columns(game_labels, prompt):
+    games = list(game_labels.keys())
+    n = len(games)
+    NUM_COLS = 3
+    # rows_per_col is fixed; never recomputed on resize so cursor math stays consistent
+    rows_per_col = (n + NUM_COLS - 1) // NUM_COLS
+    result_holder = []
 
-        # Gives option to restart (i.e. select another game)
-        if game_rq.lower() == "restart":
-            return "restart"
-        # Gives option to exit
-        elif game_rq.lower() == "exit":
+    def _ui(stdscr):
+        cursor = 0
+        scroll_offset = 0
+
+        curses.curs_set(0)
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)  # cursor highlight
+
+        while True:
+            h, w = stdscr.getmaxyx()
+            col_width = max(1, w // NUM_COLS)
+            visible_rows = max(1, h - 3)
+
+            # cursor is a flat column-major index: col = cursor // rows_per_col, row = cursor % rows_per_col
+            cursor_row = cursor % rows_per_col
+            if cursor_row < scroll_offset:
+                scroll_offset = cursor_row
+            elif cursor_row >= scroll_offset + visible_rows:
+                scroll_offset = cursor_row - visible_rows + 1
+
+            stdscr.clear()
+
+            # Use only the first line of the prompt so \n doesn't bleed into game rows
+            header = f" {prompt.splitlines()[0]}"[:w - 1]
+            stdscr.addstr(0, 0, header, curses.A_BOLD)
+
+            for row in range(visible_rows):
+                actual_row = row + scroll_offset
+                if actual_row >= rows_per_col:
+                    break  # no items exist past the last row in any column
+                for col in range(NUM_COLS):
+                    idx = col * rows_per_col + actual_row
+                    if idx >= n:
+                        continue
+                    text = games[idx]
+                    max_text = col_width - 2
+                    if len(text) > max_text:
+                        text = text[:max_text - 1] + "~"
+                    text = text.ljust(col_width - 1)
+                    try:
+                        if idx == cursor:
+                            stdscr.addstr(row + 1, col * col_width, text, curses.color_pair(1) | curses.A_BOLD)
+                        else:
+                            stdscr.addstr(row + 1, col * col_width, text)
+                    except curses.error:
+                        pass
+
+            scroll_hint = f"  (row {scroll_offset + 1}/{rows_per_col})" if rows_per_col > visible_rows else ""
+            footer = f" Arrows: navigate  ENTER: select  R: restart  D: done  ESC: exit{scroll_hint}"[:w - 1]
+            try:
+                stdscr.addstr(h - 1, 0, footer, curses.A_REVERSE)
+            except curses.error:
+                pass
+
+            stdscr.refresh()
+            key = stdscr.getch()
+
+            cur_col = cursor // rows_per_col
+            cur_row = cursor % rows_per_col
+
+            if key == curses.KEY_UP:
+                if cur_row > 0:
+                    cursor -= 1
+            elif key == curses.KEY_DOWN:
+                new = cursor + 1
+                if cur_row + 1 < rows_per_col and new < n:
+                    cursor = new
+            elif key == curses.KEY_LEFT:
+                if cur_col > 0:
+                    cursor -= rows_per_col
+            elif key == curses.KEY_RIGHT:
+                new = cursor + rows_per_col
+                if cur_col + 1 < NUM_COLS and new < n:
+                    cursor = new
+            elif key in (ord('\n'), ord('\r'), curses.KEY_ENTER):
+                result_holder.append(games[cursor])
+                break
+            elif key in (ord('r'), ord('R')):
+                result_holder.append('__restart__')
+                break
+            elif key in (ord('d'), ord('D')):
+                result_holder.append('__done__')
+                break
+            elif key == 27:  # ESC — exit
+                break
+            elif key == curses.KEY_RESIZE:
+                curses.update_lines_cols()
+                stdscr.clear()
+
+    curses.wrapper(_ui)
+    return result_holder[0] if result_holder else None
+
+
+# Function to display a passed list and prompt and return user input
+def _usr_game_input(game_labels, prompt):
+    while True:
+        game_rq = _game_select_columns(game_labels, prompt)
+
+        if game_rq is None:
             return "exit"
-        # Gives option to skip to optimization with already-queued selections
-        elif game_rq.lower() == "done":
+        elif game_rq == '__restart__':
+            return "restart"
+        elif game_rq == '__done__':
             return "done"
-        # Prevents bad/empty input
-        elif game_rq == "" or (game_rq not in game_labels):
-            theme.muted("You must choose a game, please type your desired game or type restart to start over")
-        elif game_rq in list(game_labels):
-            out = {}
-            out[game_rq] = game_labels[game_rq]
-            return out
+        elif game_rq in game_labels:
+            return {game_rq: game_labels[game_rq]}
+
+def _card_select_columns(card_names, prompt):
+    cards = list(card_names)
+    n = len(cards)
+    NUM_COLS = 3
+    rows_per_col = (n + NUM_COLS - 1) // NUM_COLS
+    result_holder = []
+
+    def _ui(stdscr):
+        selected = set()
+        cursor = 0
+        scroll_offset = 0
+
+        curses.curs_set(0)
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)  # cursor highlight
+        curses.init_pair(2, curses.COLOR_GREEN, -1)                   # selected item
+
+        while True:
+            h, w = stdscr.getmaxyx()
+            col_width = max(1, w // NUM_COLS)
+            visible_rows = max(1, h - 3)
+
+            # cursor is a flat column-major index: col = cursor // rows_per_col, row = cursor % rows_per_col
+            cursor_row = cursor % rows_per_col
+            if cursor_row < scroll_offset:
+                scroll_offset = cursor_row
+            elif cursor_row >= scroll_offset + visible_rows:
+                scroll_offset = cursor_row - visible_rows + 1
+
+            stdscr.clear()
+
+            header = f" {prompt}  [{len(selected)} selected]"[:w - 1]
+            stdscr.addstr(0, 0, header, curses.A_BOLD)
+
+            for row in range(visible_rows):
+                actual_row = row + scroll_offset
+                if actual_row >= rows_per_col:
+                    break
+                for col in range(NUM_COLS):
+                    idx = col * rows_per_col + actual_row
+                    if idx >= n:
+                        continue
+                    marker = "[x]" if idx in selected else "[ ]"
+                    text = f"{marker} {cards[idx]}"
+                    max_text = col_width - 2
+                    if len(text) > max_text:
+                        text = text[:max_text - 1] + "~"
+                    text = text.ljust(col_width - 1)
+                    try:
+                        if idx == cursor:
+                            stdscr.addstr(row + 1, col * col_width, text, curses.color_pair(1) | curses.A_BOLD)
+                        elif idx in selected:
+                            stdscr.addstr(row + 1, col * col_width, text, curses.color_pair(2) | curses.A_BOLD)
+                        else:
+                            stdscr.addstr(row + 1, col * col_width, text)
+                    except curses.error:
+                        pass
+
+            scroll_hint = f"  (row {scroll_offset + 1}/{rows_per_col})" if rows_per_col > visible_rows else ""
+            footer = f" Arrows: navigate  SPACE: select  ENTER: confirm  ESC: cancel{scroll_hint}"[:w - 1]
+            try:
+                stdscr.addstr(h - 1, 0, footer, curses.A_REVERSE)
+            except curses.error:
+                pass
+
+            stdscr.refresh()
+            key = stdscr.getch()
+
+            cur_col = cursor // rows_per_col
+            cur_row = cursor % rows_per_col
+
+            if key == curses.KEY_UP:
+                if cur_row > 0:
+                    cursor -= 1
+            elif key == curses.KEY_DOWN:
+                new = cursor + 1
+                if cur_row + 1 < rows_per_col and new < n:
+                    cursor = new
+            elif key == curses.KEY_LEFT:
+                if cur_col > 0:
+                    cursor -= rows_per_col
+            elif key == curses.KEY_RIGHT:
+                new = cursor + rows_per_col
+                if cur_col + 1 < NUM_COLS and new < n:
+                    cursor = new
+            elif key == ord(' '):
+                selected.discard(cursor) if cursor in selected else selected.add(cursor)
+            elif key in (ord('\n'), ord('\r'), curses.KEY_ENTER):
+                if not selected:
+                    msg = " Select at least one card to continue. Press any key."[:w - 1]
+                    try:
+                        stdscr.addstr(h - 1, 0, " " * (w - 1), curses.A_REVERSE)
+                        stdscr.addstr(h - 1, 0, msg, curses.A_REVERSE | curses.A_BOLD)
+                    except curses.error:
+                        pass
+                    stdscr.refresh()
+                    stdscr.getch()
+                else:
+                    sub_footer = f" [{len(selected)} cards selected]  ENTER: confirm  S: save  L: load  ESC: back"[:w - 1]
+                    try:
+                        stdscr.addstr(h - 1, 0, " " * (w - 1), curses.A_REVERSE)
+                        stdscr.addstr(h - 1, 0, sub_footer, curses.A_REVERSE | curses.A_BOLD)
+                    except curses.error:
+                        pass
+                    stdscr.refresh()
+                    sub_key = stdscr.getch()
+                    if sub_key in (ord('\n'), ord('\r'), curses.KEY_ENTER):
+                        result_holder.extend(cards[i] for i in sorted(selected))
+                        break
+                    elif sub_key in (ord('s'), ord('S')):
+                        curses.endwin()
+                        file_path = _centered_file_dialog('save')
+                        if file_path:
+                            with open(file_path, 'w') as f:
+                                for i in sorted(selected):
+                                    f.write(f"{cards[i]}\n")
+                        stdscr.refresh()
+                    elif sub_key in (ord('l'), ord('L')):
+                        curses.endwin()
+                        file_path = _centered_file_dialog('open')
+                        if file_path:
+                            with open(file_path, 'r') as f:
+                                loaded = {line.strip() for line in f if line.strip()}
+                            card_index = {name: i for i, name in enumerate(cards)}
+                            selected = {card_index[name] for name in loaded if name in card_index}
+                        stdscr.refresh()
+                    # ESC or any other key: loop back, footer redraws on next iteration
+            elif key == 27:  # ESC — cancel with no selection
+                break
+            elif key == curses.KEY_RESIZE:
+                curses.update_lines_cols()
+                stdscr.clear()
+
+    curses.wrapper(_ui)
+    return result_holder
+
 
 # Function to display passed list and allow user to continue to add to it until 'done'
-def usr_card_input(card_names, prompt):
-    done = 0
-    cardlist = []
-    while not done:
-        if card_names:
-            temp = questionary.autocomplete(
-                prompt,
-                choices=card_names,
-                style=theme.qs_style()
-            ).ask()
-        else:
-            temp = questionary.text(prompt, style=theme.qs_style()).ask()
-        if temp.lower() == 'done':
-            done = 1
-        elif temp.lower() == 'list':
-            theme.header("================================================================================")
-            for card in cardlist:
-                theme.detail(card)
-            theme.header("================================================================================")
-        elif temp.lower() == 'full':
-            theme.header("================================================================================")
-            for card in card_names:
-                theme.detail(card)
-            theme.header("================================================================================")
-        elif temp.lower() == 'load':
-            # Zeroes the list in case user previously added some
-            cardlist = []
-            file_path = _centered_file_dialog(
-                'open',
-                title="Select a File",
-                filetypes=(("Text files", "*.txt"), ("All files", "*.*"))
-            )
-
-            # Open the file and read lines into a list
-            if file_path:
-                with open(file_path, 'r') as file:
-                    cardlist = [line.strip() for line in file.readlines()]
-        elif temp.lower() == 'save':
-            file_path = _centered_file_dialog(
-                'save',
-                defaultextension=".txt",
-                filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
-                title="Choose where to save your list"
-            )
-
-            # Only proceed if user doesn't hit cancel
-            if file_path:
-                with open(file_path, 'w') as file:
-                    for item in cardlist:
-                        file.write(f"{item}\n")
-                    theme.info(f"Successfully saved to: {file_path}")
-        # elif temp.lower() == 'exit':
-        #     return "exit"
-        # elif temp.lower() == 'restart':
-        #     return "restart"
-        elif temp in card_names:
-            cardlist.append(temp)
-        else:
-            pass
-    return cardlist
+def _usr_card_input(card_names, prompt):
+    return _card_select_columns(card_names, prompt)
 
 # Function to display a passed list and prompt and return user input
-def usr_set_input(set_data_clean, prompt):
+def _usr_set_input(set_data_clean, prompt):
     while True:
         set_rq = questionary.autocomplete(
             prompt,
