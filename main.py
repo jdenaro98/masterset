@@ -5,16 +5,20 @@ from urllib.parse import parse_qs, urlparse
 import crossfiledialog
 import optimizer
 import cart_create
-from rich.progress import track
+import theme
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, MofNCompleteColumn, TimeRemainingColumn
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 def main():
-    print("==================================")
-    print("Welcome to the TCGPlayer Scraper!")
-    print("==================================")
-    print(".\n.\n.\n")
-    print("Gathering a list of TCG Games...")
+
+    theme.initialize()
+
+    theme.header("================================================================================")
+    theme.header("Welcome to the TCGScraper!")
+    theme.header("================================================================================")
+    theme.muted(".\n.\n.\n")
+    theme.info("Gathering a list of TCG Games...")
 
     game_data = {}
     categories_data = fetch_categories()
@@ -33,7 +37,7 @@ def main():
 
         pending_selections.append(selection)
 
-        if not questionary.confirm("Add cards from another set to optimize together?").ask():
+        if not questionary.confirm("Add cards from another set to optimize together?", style=theme.qs_style()).ask():
             break
 
     # Build flat task list: (product_id, "Card Name [Set Name]")
@@ -44,7 +48,7 @@ def main():
     ]
 
     if not tasks:
-        print("No cards selected. Exiting.")
+        theme.muted("No cards selected. Exiting.")
         return
 
     all_card_data = {}
@@ -58,23 +62,33 @@ def main():
             for product_id, display_name in tasks
         }
 
-        for future in track(as_completed(future_to_card), description="Scraping cards...", total=len(future_to_card)):
-            product_id, display_name = future_to_card[future]
-            print(f"Processing: {display_name} (ID: {product_id})...")
-            try:
-                raw_listings = future.result()
-            except Exception as exc:
-                print(f"Error fetching listings for {display_name} ({product_id}): {exc}")
-                raw_listings = []
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            console=theme.console,
+        ) as progress:
+            task_id = progress.add_task("Scraping cards...", total=len(future_to_card))
+            for future in as_completed(future_to_card):
+                product_id, display_name = future_to_card[future]
+                theme.info(f"Processing: {display_name} (ID: {product_id})...")
+                try:
+                    raw_listings = future.result()
+                except Exception as exc:
+                    theme.muted(f"Error fetching listings for {display_name} ({product_id}): {exc}")
+                    raw_listings = []
 
-            cleaned_listings = extract_key_chars(raw_listings)
-            all_card_data[product_id] = {
-                "card_info": {
-                    "name": display_name,
-                    "total_active_listings": len(cleaned_listings)
-                },
-                "market_listings": cleaned_listings
-            }
+                cleaned_listings = extract_key_chars(raw_listings)
+                all_card_data[product_id] = {
+                    "card_info": {
+                        "name": display_name,
+                        "total_active_listings": len(cleaned_listings)
+                    },
+                    "market_listings": cleaned_listings
+                }
+                progress.advance(task_id)
 
     for product_id, card_data in all_card_data.items():
         card_name = card_data["card_info"]["name"]
@@ -84,19 +98,19 @@ def main():
             first_entry['card'] = card_name
             first_listing_data.append(first_entry)
         else:
-            print(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
+            theme.muted(f"Note: No listings found for {card_name}, skipping in first_listing_data.")
 
     print_cart(first_listing_data, "\nFirst Listings:\n")
 
     optimized_cart = optimizer.optimize(all_card_data)
     print_cart(optimized_cart, "\nOptimized Cart:\n")
 
-    if questionary.confirm("Open browser and add the optimized items to cart using Playwright?").ask():
+    if questionary.confirm("Open browser and add the optimized items to cart using Playwright?", style=theme.qs_style()).ask():
         cookie_export_path = cart_create.create_cart(optimized_cart)
         if cookie_export_path:
-            print(f"Cart cookies exported to: {cookie_export_path}")
+            theme.info(f"Cart cookies exported to: {cookie_export_path}")
         else:
-            print("Cart creation finished, but cookie export was not completed.")
+            theme.muted("Cart creation finished, but cookie export was not completed.")
 
 
 def collect_selection(game_data, has_prior=False):
@@ -104,9 +118,9 @@ def collect_selection(game_data, has_prior=False):
     Returns {"set_name", "card_list", "product_id_list"}, "exit", or "done".
     """
     while True:
-        print("\n" + "=" * 40)
+        theme.header("\n" + "=" * 40)
         for item, i in zip(game_data, range(len(game_data))):
-            print(f"{i+1}. {item}")
+            theme.info(f"{i+1}. {item}")
 
         done_hint = "\n You can type 'done' to skip to optimization with your current selections." if has_prior else ""
         game_rq = usr_game_input(
@@ -123,7 +137,7 @@ def collect_selection(game_data, has_prior=False):
         elif game_rq == "done":
             return "done"
 
-        print(f"\nYou chose game {next(iter(game_rq))}, Id #: {next(iter(game_rq.values()))}. Great choice!\n")
+        theme.info(f"\nYou chose game {next(iter(game_rq))}, Id #: {next(iter(game_rq.values()))}. Great choice!\n")
 
         set_data_clean = {}
         set_data = fetch_sets(next(iter(game_rq.values())))
@@ -131,7 +145,7 @@ def collect_selection(game_data, has_prior=False):
             set_data = set_data.get("results", [])
         for item in set_data:
             set_data_clean[item.get("name")] = item.get("setNameId")
-        print(f"Visiting the 'Price Guide' page for {next(iter(game_rq))}!")
+        theme.info(f"Visiting the 'Price Guide' page for {next(iter(game_rq))}!")
 
         set_rq = usr_set_input(
             set_data_clean,
@@ -145,9 +159,9 @@ def collect_selection(game_data, has_prior=False):
             return "exit"
 
         set_name = next(iter(set_rq))
-        print(f"You chose set: {set_name}, ID #: {next(iter(set_rq.values()))}. Great choice!")
+        theme.info(f"You chose set: {set_name}, ID #: {next(iter(set_rq.values()))}. Great choice!")
 
-        print("Gathering all cards and their product pages in your desired set\n    This might take a minute!")
+        theme.info("Gathering all cards and their product pages in your desired set\n    This might take a minute!")
 
         card_data_clean = {}
         card_data = fetch_cards(next(iter(set_rq.values())), next(iter(game_rq.values())))
@@ -160,7 +174,7 @@ def collect_selection(game_data, has_prior=False):
         product_ids = list(card_data_clean.values())
 
         if not card_names:
-            print("No cards found in this set. Please choose another set.")
+            theme.muted("No cards found in this set. Please choose another set.")
             continue
 
         opts = [
@@ -170,7 +184,8 @@ def collect_selection(game_data, has_prior=False):
         ]
         scrape_choice = questionary.select(
             "Please Choose an option for how you'd like to scrape your card data",
-            choices=opts
+            choices=opts,
+            style=theme.qs_style()
         ).ask()
 
         card_list = []
@@ -211,9 +226,9 @@ def collect_selection(game_data, has_prior=False):
             card_list = list(card_names)
             product_id_list = list(product_ids)
 
-        print(f"\nYour final card list for [{set_name}]:")
+        theme.header(f"\nYour final card list for [{set_name}]:")
         for card in card_list:
-            print(f"  {card}")
+            theme.detail(f"  {card}")
 
         return {"set_name": set_name, "card_list": card_list, "product_id_list": product_id_list}
 
@@ -240,7 +255,7 @@ def fetch_categories():
         response = request_context.get(url, headers=headers)
 
         if not response.ok:
-            print(f"Failed to fetch categories: {response.status}")
+            theme.muted(f"Failed to fetch categories: {response.status}")
             return []
 
         # The API returns a list of objects: [{"productLineId": 1, "productLineName": "Magic...", ...}]
@@ -266,7 +281,7 @@ def fetch_sets(gameID):
         response = request_context.get(url, headers=headers)
 
         if not response.ok:
-            print(f"Failed to fetch sets: {response.status}")
+            theme.muted(f"Failed to fetch sets: {response.status}")
             return []
 
         data = response.json()
@@ -306,18 +321,16 @@ def fetch_cards(setID, gameID):
             )
 
         if pdID is None:
-            print(f"Failed to fetch productTypeId for set {setID}")
+            theme.muted(f"Failed to fetch productTypeId for set {setID}")
             return []
 
-        print(pdID)
         # Then construct actual price guide url with that info
         url = f"https://infinite-api.tcgplayer.com/priceguide/set/{setID}/cards/?rows=5000&productTypeID={pdID}"
-        print(url)
 
         response = request_context.get(url, headers=headers)
 
         if not response.ok:
-            print(f"Failed to fetch cards: {response.status}")
+            theme.muted(f"Failed to fetch cards: {response.status}")
             return []
 
         data = response.json()
@@ -366,11 +379,10 @@ def fetch_listings(product_id, max_listings=None, session=None):
                 "aggregations": ["listingType"]
             }
 
-            print(f"Fetching listings {offset} to {offset + size} for product {product_id}...")
             response = session.post(url, headers=headers, json=payload, timeout=15)
 
             if not response.ok:
-                print(f"Failed to fetch: {response.status_code} {response.text}")
+                theme.muted(f"Failed to fetch: {response.status_code} {response.text}")
                 break
 
             data = response.json()
@@ -418,11 +430,11 @@ def extract_key_chars(raw_listings):
 
             if item.get("language") == "English":
                 if re.search(r'(Japanese|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', titledata, re.I):
-                    print("Skipping non-English listing")
+                    theme.muted("Skipping non-English listing")
                     continue
             elif item.get("language") == "Japanese":
                 if re.search(r'(English|Chinese|Korean|Spanish|French|German|Italian|Portuguese|Thai|Indonesian|Dutch|Russian|Polish)', titledata, re.I):
-                    print("Skipping non-Japanese listing")
+                    theme.muted("Skipping non-Japanese listing")
                     continue
             else: pass
 
@@ -447,22 +459,22 @@ def extract_key_chars(raw_listings):
                 "custom_listing_key": item.get("customData", {}).get("linkId", "No Picture Linked")
             }
         except KeyError as e:
-            print(f"Missing expected field in listing: {e}")
+            theme.muted(f"Missing expected field in listing: {e}")
             continue
         cleaned_listings.append(parsed_seller)
     return cleaned_listings
 
 # Prints sructured dictionary that's sent to it (pre vs post optimization cart)
 def print_cart(cart, title):
-    print(title)
+    theme.header(title)
     sellers = {item['seller'] for item in cart if item.get('seller')}
     total_price = sum(item.get('price') or 0.0 for item in cart if item.get('price') is not None)
     total_shipping = shipping_calc(cart)
     total_cost = total_price + total_shipping
-    print(f"  Unique sellers: {len(sellers)}")
-    print(f"  Raw card cost: ${total_price:.2f}")
-    print(f"  Shipping Cost: ${total_shipping:.2f}")
-    print(f"  Estimated subtotal: ${total_cost:.2f}\n")
+    theme.info(f"  Unique sellers: {len(sellers)}")
+    theme.info(f"  Raw card cost: ${total_price:.2f}")
+    theme.info(f"  Shipping Cost: ${total_shipping:.2f}")
+    theme.info(f"  Estimated subtotal: ${total_cost:.2f}\n")
     for item in cart:
         seller = item.get('seller') or 'N/A'
         condition = item.get('condition') or 'N/A'
@@ -472,8 +484,7 @@ def print_cart(cart, title):
         total = item.get('total') if item.get('total') is not None else 0.0
         url = item.get('card_url') or 'N/A'
         card = item.get('card') or 'N/A'
-        # seller_id = item.get('seller_id') or 'N/A'
-        print(f"  - {card} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
+        theme.detail(f"  - {card} | {seller} | {condition} | ${price:.2f} | ${shipping:.2f} | {shipping_deal} | ${total:.2f} | {url}")
 
 # Shipping price logic on per-seller basis
 def shipping_calc(cart):
@@ -535,7 +546,8 @@ def usr_game_input(game_labels, prompt):
     while True:
         game_rq = questionary.autocomplete(
             prompt,
-            choices = list(game_labels)
+            choices=list(game_labels),
+            style=theme.qs_style()
         ).ask()
 
         # Gives option to restart (i.e. select another game)
@@ -549,7 +561,7 @@ def usr_game_input(game_labels, prompt):
             return "done"
         # Prevents bad/empty input
         elif game_rq == "" or (game_rq not in game_labels):
-            print("You must choose a game, please type your desired game or type restart to start over")
+            theme.muted("You must choose a game, please type your desired game or type restart to start over")
         elif game_rq in list(game_labels):
             out = {}
             out[game_rq] = game_labels[game_rq]
@@ -563,22 +575,23 @@ def usr_card_input(card_names, prompt):
         if card_names:
             temp = questionary.autocomplete(
                 prompt,
-                choices = card_names
+                choices=card_names,
+                style=theme.qs_style()
             ).ask()
         else:
-            temp = questionary.text(prompt).ask()
+            temp = questionary.text(prompt, style=theme.qs_style()).ask()
         if temp.lower() == 'done':
             done = 1
         elif temp.lower() == 'list':
-            print("=============================")
+            theme.header("================================================================================")
             for card in cardlist:
-                print(card)
-            print("=============================")
+                theme.detail(card)
+            theme.header("================================================================================")
         elif temp.lower() == 'full':
-            print("=============================")
+            theme.header("================================================================================")
             for card in card_names:
-                print(card)
-            print("=============================")
+                theme.detail(card)
+            theme.header("================================================================================")
         elif temp.lower() == 'load':
             # Zeroes the list in case user previously added some
             cardlist = []
@@ -605,7 +618,7 @@ def usr_card_input(card_names, prompt):
                 with open(file_path, 'w') as file:
                     for item in cardlist:
                         file.write(f"{item}\n")
-                    print(f"Successfully saved to: {file_path}")
+                    theme.info(f"Successfully saved to: {file_path}")
         # elif temp.lower() == 'exit':
         #     return "exit"
         # elif temp.lower() == 'restart':
@@ -621,14 +634,15 @@ def usr_set_input(set_data_clean, prompt):
     while True:
         set_rq = questionary.autocomplete(
             prompt,
-            choices = list(set_data_clean)
+            choices=list(set_data_clean),
+            style=theme.qs_style()
         ).ask()
 
         # Gives option to list all sets
         if set_rq.lower() == "list":
         # Printing resulting numerical set list
             for key, i in zip(set_data_clean, range(len(set_data_clean))):
-                print(f"{i+1}. {key}")
+                theme.info(f"{i+1}. {key}")
             continue
         # Gives option to restart (i.e. select another game)
         elif set_rq.lower() == "restart":
@@ -638,7 +652,7 @@ def usr_set_input(set_data_clean, prompt):
             return "exit"
         # Prevents bad/empty input
         elif set_rq == "" or (set_rq not in set_data_clean):
-            print("You must choose a set, please type your desired set or type restart to start over")
+            theme.muted("You must choose a set, please type your desired set or type restart to start over")
         elif set_rq in list(set_data_clean):
             out = {}
             out[set_rq] = set_data_clean[set_rq]

@@ -10,13 +10,18 @@ _CHAR_ASPECT = 0.5
 _TARGET_WIDTH = 80
 
 def main():
-    for i in range(1, 1026):
-        image_path = f"art/images/pokemon/{i:03d}.png"
-        if os.path.exists(image_path):
-            plain_path, color_path = image_gen(image_path)
-            print(f"Generated ASCII art for {image_path} at {plain_path} and {color_path}")
-        else:
-            print(f"Image not found: {image_path}")
+    pass
+    # Define actual usage of main if using standalone
+    # If using as module, then import image_gen and call functions as needed
+    
+    # Example usage: ASCII generation for entire 1025 pokemon library from .jpg
+    # for i in range(1, 1026):
+    #     image_path = f"art/images/pokemon/{i:03d}.png"
+    #     if os.path.exists(image_path):
+    #         plain_path, color_path = image_gen(image_path)
+    #         print(f"Generated ASCII art for {image_path} at {plain_path} and {color_path}")
+    #     else:
+    #         print(f"Image not found: {image_path}")
 
 
 def image_gen(image_path: str) -> tuple[str, str]:
