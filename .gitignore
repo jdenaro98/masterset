@@ -1,8 +1,12 @@
-/__pycache__
-*.cpython-313.pyc
+__pycache__/
+*.pyc
 /.playwright_cart_profile
 /test_cases/user_data
 /user_data
 tcgplayer_cookies.json
 .DS_Store
 *.temp
+/debug
+.ruff_cache
+/node_modules
+/venv
