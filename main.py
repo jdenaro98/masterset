@@ -32,6 +32,9 @@ def main():
         selection = _collect_selection(game_data, has_prior=bool(pending_selections))
         if selection == "exit":
             return
+        if selection == "restart":
+            pending_selections.clear()
+            continue
         if selection == "done":
             break
 
@@ -127,10 +130,11 @@ def _collect_selection(game_data, has_prior=False):
             "Please choose which game you'd like to scrape: "
             "\n You can type 'restart' to go back to the beginning. "
             "\n Please type 'exit' to leave TCGScraper!"
-            + done_hint
+            + done_hint,
+            has_prior=has_prior
         )
         if game_rq == "restart":
-            continue
+            return "restart"
         elif game_rq == "exit":
             return "exit"
         elif game_rq == "done":
@@ -574,7 +578,7 @@ def _centered_file_dialog(dialog_type, **options):
     else:
         return crossfiledialog.save_file(title=options.get('title', 'Choose where to save your list'))
 
-def _game_select_columns(game_labels, prompt):
+def _game_select_columns(game_labels, prompt, has_prior=False):
     games = list(game_labels.keys())
     n = len(games)
     NUM_COLS = 3
@@ -631,7 +635,8 @@ def _game_select_columns(game_labels, prompt):
                         pass
 
             scroll_hint = f"  (row {scroll_offset + 1}/{rows_per_col})" if rows_per_col > visible_rows else ""
-            footer = f" Arrows: navigate  ENTER: select  R: restart  D: done  ESC: exit{scroll_hint}"[:w - 1]
+            extra = "  R: restart  D: done" if has_prior else ""
+            footer = f" Arrows: navigate  ENTER: select{extra}  ESC: exit{scroll_hint}"[:w - 1]
             try:
                 stdscr.addstr(h - 1, 0, footer, curses.A_REVERSE)
             except curses.error:
@@ -660,12 +665,28 @@ def _game_select_columns(game_labels, prompt):
             elif key in (ord('\n'), ord('\r'), curses.KEY_ENTER):
                 result_holder.append(games[cursor])
                 break
-            elif key in (ord('r'), ord('R')):
-                result_holder.append('__restart__')
-                break
-            elif key in (ord('d'), ord('D')):
-                result_holder.append('__done__')
-                break
+            elif key in (ord('r'), ord('R')) and has_prior:
+                confirm_msg = " Confirm restart? ENTER to confirm, ESC to cancel"[:w - 1]
+                try:
+                    stdscr.addstr(h - 1, 0, " " * (w - 1), curses.A_REVERSE)
+                    stdscr.addstr(h - 1, 0, confirm_msg, curses.A_REVERSE | curses.A_BOLD)
+                except curses.error:
+                    pass
+                stdscr.refresh()
+                if stdscr.getch() in (ord('\n'), ord('\r'), curses.KEY_ENTER):
+                    result_holder.append('__restart__')
+                    break
+            elif key in (ord('d'), ord('D')) and has_prior:
+                confirm_msg = " Done adding sets? ENTER to confirm, ESC to cancel"[:w - 1]
+                try:
+                    stdscr.addstr(h - 1, 0, " " * (w - 1), curses.A_REVERSE)
+                    stdscr.addstr(h - 1, 0, confirm_msg, curses.A_REVERSE | curses.A_BOLD)
+                except curses.error:
+                    pass
+                stdscr.refresh()
+                if stdscr.getch() in (ord('\n'), ord('\r'), curses.KEY_ENTER):
+                    result_holder.append('__done__')
+                    break
             elif key == 27:  # ESC — exit
                 break
             elif key == curses.KEY_RESIZE:
@@ -677,13 +698,18 @@ def _game_select_columns(game_labels, prompt):
 
 
 # Function to display a passed list and prompt and return user input
-def _usr_game_input(game_labels, prompt):
+def _usr_game_input(game_labels, prompt, has_prior=False):
     while True:
-        game_rq = _game_select_columns(game_labels, prompt)
+        game_rq = _game_select_columns(game_labels, prompt, has_prior=has_prior)
 
         if game_rq is None:
             return "exit"
         elif game_rq == '__restart__':
+            subprocess.run('cls' if os.name == 'nt' else 'clear', shell=True)
+            theme.header("================================================================================")
+            theme.header("Restarting TCGScraper...")
+            theme.header("================================================================================")
+            time.sleep(1)
             return "restart"
         elif game_rq == '__done__':
             return "done"
