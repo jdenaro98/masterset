@@ -28,10 +28,10 @@ if (!process.env.TCGSCRAPER_BORDERED) {
   } else {
     const tmp = path.join(require('os').tmpdir(), 'tcgscraper_launch.sh');
     fs.writeFileSync(tmp,
-      `#!/bin/bash\nexport TCGSCRAPER_BORDERED=1\nnode "${script}"\n`, 'utf8');
+      `#!/bin/bash\nexport TCGSCRAPER_BORDERED=1\nnode "${script}"\nosascript -e 'tell application "Terminal" to close front window' 2>/dev/null || true\n`, 'utf8');
     fs.chmodSync(tmp, 0o755);
     spawn('osascript', [
-      '-e', `tell application "Terminal" to do script "${tmp}; exit 0"`,
+      '-e', `tell application "Terminal" to do script "${tmp}"`,
     ], { detached: true, stdio: 'ignore' }).unref();
   }
 
