@@ -12,14 +12,17 @@ if (!process.env.TCGSCRAPER_BORDERED) {
   if (process.platform === 'win32') {
     try {
       execSync('where wt.exe', { stdio: 'ignore' });
-      spawn('wt.exe', ['--title', 'TCGScraper', '--', 'node', script], {
-        env:      { ...process.env, TCGSCRAPER_BORDERED: '1' },
+      spawn('wt.exe', ['--size', '50x160', '--title', 'TCGScraper', '--', 'node', script], {
+        env:      { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
         detached: true,
         stdio:    'ignore',
       }).unref();
     } catch {
-      spawn('cmd.exe', ['/c', 'node', script], {
-        env:         { ...process.env, TCGSCRAPER_BORDERED: '1' },
+      const batPath = path.join(require('os').tmpdir(), 'tcgscraper_launch.bat');
+      fs.writeFileSync(batPath,
+        `@echo off\r\nmode con: cols=160 lines=50\r\ntitle TCGScraper\r\nnode "${script}"\r\n`, 'utf8');
+      spawn('cmd.exe', ['/c', batPath], {
+        env:         { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
         detached:    true,
         stdio:       'ignore',
         windowsHide: false,
@@ -50,6 +53,62 @@ process.on('uncaughtException', err => {
 });
 
 async function run() {
+  // ── card selection helper (Save / Load / Restart / Exit support) ──────────
+  async function runCardSelection(allCardNames, promptText, setNameForFile) {
+    const sanitized = setNameForFile.replace(/[^a-z0-9]/gi, '_');
+    const defaultFile = `${sanitized}_cards.txt`;
+    let initial = [];
+
+    while (true) {
+      const result = await ui.showMultiSelect(allCardNames, promptText, { initialSelected: initial });
+
+      if (result.action === 'confirm') {
+        return { action: 'done', selected: result.selected };
+      }
+      if (result.action === 'restart') {
+        return { action: 'restart' };
+      }
+      if (result.action === 'exit') {
+        ipc.kill();
+        ui.shutdown();
+        return;
+      }
+      if (result.action === 'save') {
+        const fname = await ui.showTextInput('Save selected cards to file:', defaultFile);
+        if (fname) {
+          try {
+            fs.writeFileSync(fname, result.selected.join('\n'), 'utf8');
+            ui.muted(`Saved ${result.selected.length} card(s) to "${fname}".`);
+          } catch (e) {
+            ui.muted(`Save failed: ${e.message}`);
+          }
+          await new Promise(r => setTimeout(r, 900));
+        }
+        initial = result.selected;
+      } else if (result.action === 'load') {
+        const fname = await ui.showTextInput('Load cards from file:', defaultFile);
+        if (fname) {
+          try {
+            const lines = fs.readFileSync(fname, 'utf8')
+              .split('\n').map(l => l.trim()).filter(Boolean);
+            const valid = lines.filter(n => allCardNames.includes(n));
+            const skipped = lines.length - valid.length;
+            if (skipped > 0) ui.muted(`${skipped} name(s) not in this set — skipped.`);
+            ui.muted(`Loaded ${valid.length} card(s) from "${fname}".`);
+            await new Promise(r => setTimeout(r, 900));
+            initial = valid;
+          } catch (e) {
+            ui.muted(`Load failed: ${e.message}`);
+            await new Promise(r => setTimeout(r, 1200));
+            initial = result.selected;
+          }
+        } else {
+          initial = result.selected;
+        }
+      }
+    }
+  }
+
   // 1. Boot screen first so no backend stderr bleeds through before blessed takes over
   ui.initScreen();
 
@@ -64,9 +123,7 @@ async function run() {
 
   // 4. Welcome
   ui.sectionClear();
-  ui.header('='.repeat(60));
-  ui.header('  Welcome to the TCGScraper!');
-  ui.header('='.repeat(60));
+  ui.showWelcome();
   ui.muted('\nGathering a list of TCG Games…');
 
   // 5. Fetch categories
@@ -166,26 +223,39 @@ async function run() {
     let selectedCardNames = [];
     let selectedCardIds   = [];
 
+    let cardSelRestart = false;
+
     if (scrapeChoice === scrapeOpts[0]) {
-      ui.sectionClear();
-      selectedCardNames = await ui.showMultiSelect(
-        cardNames, `Select cards to INCLUDE from ${setName}`
+      const selResult = await runCardSelection(
+        cardNames, `Select cards to INCLUDE from ${setName}`, setName
       );
-      selectedCardIds = selectedCardNames.map(n => cardData[n]);
+      if (!selResult) return;
+      if (selResult.action === 'restart') {
+        cardSelRestart = true;
+      } else {
+        selectedCardNames = selResult.selected;
+        selectedCardIds   = selectedCardNames.map(n => cardData[n]);
+      }
 
     } else if (scrapeChoice === scrapeOpts[1]) {
-      ui.sectionClear();
-      const excluded = await ui.showMultiSelect(
-        cardNames, `Select cards to EXCLUDE from ${setName}`
+      const selResult = await runCardSelection(
+        cardNames, `Select cards to EXCLUDE from ${setName}`, setName
       );
-      const excSet = new Set(excluded);
-      selectedCardNames = cardNames.filter(n => !excSet.has(n));
-      selectedCardIds   = selectedCardNames.map(n => cardData[n]);
+      if (!selResult) return;
+      if (selResult.action === 'restart') {
+        cardSelRestart = true;
+      } else {
+        const excSet = new Set(selResult.selected);
+        selectedCardNames = cardNames.filter(n => !excSet.has(n));
+        selectedCardIds   = selectedCardNames.map(n => cardData[n]);
+      }
 
     } else {
       selectedCardNames = [...cardNames];
       selectedCardIds   = [...cardIds];
     }
+
+    if (cardSelRestart) continue;
 
     if (!selectedCardNames.length) {
       ui.muted('No cards selected.');

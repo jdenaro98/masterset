@@ -6,13 +6,28 @@ const { spawnBackend, call, on: onEvent } = require('./ipc');
 // ── screen & outer border ──────────────────────────────────────────────────
 
 let screen, outerBox, logBox, activeWidget;
+let activeHints = [];
 let PRIMARY = '#ffffff', SECONDARY = '#b4dcff', ACCENT = '#8cc8b4';
 
 function rgb([r, g, b]) {
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
+function desaturate([r, g, b], factor) {
+  const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  return [
+    Math.round(gray + (r - gray) * factor),
+    Math.round(gray + (g - gray) * factor),
+    Math.round(gray + (b - gray) * factor),
+  ];
+}
+
 function initScreen() {
+  // Request a comfortable window size via VT sequence (Windows Terminal + xterm-compatible).
+  // By the time runSplash is called (after async IPC), the terminal will have resized
+  // and blessed will have received SIGWINCH with the updated dimensions.
+  process.stdout.write('\x1b[8;50;160t');
+
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
@@ -24,7 +39,7 @@ function initScreen() {
     parent: screen,
     top: 0, left: 0, width: '100%', height: '100%',
     border: { type: 'line', fg: PRIMARY },
-    style:  { border: { fg: PRIMARY } },
+    style:  { border: { fg: PRIMARY }, bg: '#000000' },
   });
 
   logBox = blessed.log({
@@ -42,9 +57,11 @@ function initScreen() {
 }
 
 function applyTheme(primary, secondary, accent) {
-  PRIMARY   = rgb(primary);
-  SECONDARY = rgb(secondary);
-  ACCENT    = rgb(accent);
+  const isWin = process.platform === 'win32';
+  const tune  = isWin ? c => desaturate(c, 0.50) : c => c;
+  PRIMARY   = rgb(tune(primary));
+  SECONDARY = rgb(tune(secondary));
+  ACCENT    = rgb(tune(accent));
   if (outerBox) {
     outerBox.style.border.fg = PRIMARY;
     screen.render();
@@ -65,7 +82,7 @@ function header(text) {
 }
 
 function muted(text) {
-  logBox.log(`{grey-fg}${escape(text)}{/}`);
+  logBox.log(`{#888888-fg}${escape(text)}{/}`);
   screen.render();
 }
 
@@ -75,11 +92,26 @@ function escape(t) {
 
 // ── section transitions ────────────────────────────────────────────────────
 
+function hintWidget(text, row, hexColor) {
+  const color = hexColor || '#cccccc';
+  const w = blessed.text({
+    parent:  outerBox,
+    top: row, left: 1, right: 1, height: 1,
+    content: `{${color}-fg}${escape(text)}{/}`,
+    style:   { bg: '#000000' },
+    tags:    true,
+  });
+  activeHints.push(w);
+  return w;
+}
+
 function sectionClear() {
   if (activeWidget) {
     activeWidget.destroy();
     activeWidget = null;
   }
+  for (const h of activeHints) h.destroy();
+  activeHints = [];
   logBox.setContent('');
   logBox.show();
   screen.render();
@@ -90,25 +122,48 @@ function sectionClear() {
 function runSplash(artContent, primary) {
   return new Promise(resolve => {
     logBox.hide();
+
+    // Vertically center the sprite in the display area
+    const artLines   = artContent.split('\n');
+    const boxH       = Math.max(1, (screen.rows || screen.height || 40) - 2);
+    const topPad     = Math.max(0, Math.floor((boxH - artLines.length) / 2));
+    const displayContent = '\n'.repeat(topPad) + artContent;
+
     const artBox = blessed.box({
       parent:  outerBox,
       top: 0, left: 0, right: 0, bottom: 0,
       tags:    false,
-      content: artContent,
+      content: displayContent,
+      style:   { bg: '#000000' },
     });
 
-    const steps = 24;
+    // 3 shimmer pulses over ~3 seconds (~28 fps)
+    const totalSteps = 90;
+    const intervalMs = 35;
+    const [r, g, b]  = primary;
     let step = 0;
-    const [r, g, b] = primary;
+
     const timer = setInterval(() => {
-      const t  = Math.sin((step / steps) * Math.PI);
-      const fr = Math.min(255, Math.round(r + (255 - r) * t * 0.6));
-      const fg = Math.min(255, Math.round(g + (255 - g) * t * 0.6));
-      const fb = Math.min(255, Math.round(b + (255 - b) * t * 0.6));
+      // Fade-in/out envelope wraps 3 rapid shimmer pulses
+      const envelope = Math.sin((step / totalSteps) * Math.PI);
+      const pulse    = Math.abs(Math.sin((step / totalSteps) * Math.PI * 3));
+      const t        = envelope * pulse;
+
+      // Border glow
+      const fr = Math.min(255, Math.round(r + (255 - r) * t * 0.85));
+      const fg = Math.min(255, Math.round(g + (255 - g) * t * 0.85));
+      const fb = Math.min(255, Math.round(b + (255 - b) * t * 0.85));
       outerBox.style.border.fg = rgb([fr, fg, fb]);
+
+      // Background aura behind the sprite (tints uncolored cells of the art)
+      const bgR = Math.round(r * t * 0.25);
+      const bgG = Math.round(g * t * 0.25);
+      const bgB = Math.round(b * t * 0.25);
+      artBox.style.bg = rgb([bgR, bgG, bgB]);
+
       screen.render();
       step++;
-      if (step > steps) {
+      if (step > totalSteps) {
         clearInterval(timer);
         outerBox.style.border.fg = PRIMARY;
         artBox.destroy();
@@ -116,7 +171,7 @@ function runSplash(artContent, primary) {
         screen.render();
         resolve();
       }
-    }, 40);
+    }, intervalMs);
   });
 }
 
@@ -141,7 +196,8 @@ function makeKeyManager() {
 function showGridSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
 
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
@@ -185,7 +241,7 @@ function showGridSelect(items, promptText, opts = {}) {
             ? name.substring(0, maxText - 1) + '…'
             : name.padEnd(maxText);
           line += isCur
-            ? `{white-bg}{black-fg} ${escape(cell)} {/}`
+            ? `{#ffffff-bg}{#000000-fg} ${escape(cell)} {/}`
             : `{${SECONDARY}-fg} ${escape(cell)} {/}`;
         }
         lines.push(line);
@@ -240,15 +296,24 @@ function showGridSelect(items, promptText, opts = {}) {
 
 // ── 3-column multi-select ──────────────────────────────────────────────────
 
-function showMultiSelect(items, promptText) {
+function showMultiSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
-    header('  SPACE: toggle   ENTER: confirm   ESC: cancel');
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
+    hintWidget('  SPACE: toggle   ENTER: confirm   S: save   L: load   R: restart   Q: quit', 1, '#888888');
 
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
     const selected = new Set();
+
+    if (opts.initialSelected) {
+      for (const name of opts.initialSelected) {
+        const idx = items.indexOf(name);
+        if (idx >= 0) selected.add(idx);
+      }
+    }
+
     let curRow = 0, curCol = 0;
     const km = makeKeyManager();
 
@@ -292,7 +357,7 @@ function showMultiSelect(items, promptText) {
             : name.padEnd(maxText);
           const text = escape(prefix + cell);
           if (isCur) {
-            line += `{white-bg}{black-fg} ${text} {/}`;
+            line += `{#ffffff-bg}{#000000-fg} ${text} {/}`;
           } else if (isSel) {
             line += `{${PRIMARY}-fg} ${text} {/}`;
           } else {
@@ -338,10 +403,24 @@ function showMultiSelect(items, promptText) {
         render();
       }
     });
+    const toNames = () => [...selected].sort((a, b) => a - b).map(i => items[i]);
+
     gridBox.key(['enter', 'return'], () => {
-      cleanupAndResolve([...selected].sort((a, b) => a - b).map(i => items[i]));
+      cleanupAndResolve({ action: 'confirm', selected: toNames() });
     });
-    km.add('escape', () => cleanupAndResolve([]));
+    gridBox.key(['s', 'S'], () => {
+      cleanupAndResolve({ action: 'save', selected: toNames() });
+    });
+    gridBox.key(['l', 'L'], () => {
+      cleanupAndResolve({ action: 'load', selected: toNames() });
+    });
+    gridBox.key(['r', 'R'], () => {
+      cleanupAndResolve({ action: 'restart', selected: [] });
+    });
+    gridBox.key(['q', 'Q'], () => {
+      cleanupAndResolve({ action: 'exit', selected: [] });
+    });
+    km.add('escape', () => cleanupAndResolve({ action: 'restart', selected: [] }));
 
     gridBox.focus();
     activeWidget = gridBox;
@@ -354,8 +433,9 @@ function showMultiSelect(items, promptText) {
 function showAutocomplete(choices, promptText) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
-    header('  Type to filter   TAB: autocomplete   ↓/ENTER: confirm   ESC: back');
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
+    hintWidget('  Type to filter   TAB: autocomplete   ↓/ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
     const km = makeKeyManager();
@@ -371,7 +451,7 @@ function showAutocomplete(choices, promptText) {
     const inputBox = blessed.textbox({
       parent: outerBox,
       top: 3, left: 1, right: 1, height: 1,
-      style: { fg: PRIMARY, bg: 'black' },
+      style: { fg: PRIMARY, bg: '#000000' },
       inputOnFocus: true,
     });
 
@@ -386,7 +466,7 @@ function showAutocomplete(choices, promptText) {
       scrollbar: { ch: '│' },
       items: filtered,
       style: {
-        selected: { bg: 'white', fg: 'black', bold: true },
+        selected: { bg: '#ffffff', fg: '#000000', bold: true },
         item:     { fg: SECONDARY },
       },
       tags: false,
@@ -478,18 +558,18 @@ function showConfirm(question) {
 
     blessed.text({
       parent: dlg,
-      bottom: 0, left: 2,
+      bottom: 1, left: 2,
       content: '←/→/TAB move   ENTER confirm   Y/N hotkeys',
-      style: { fg: 'grey' },
+      style: '#888888',
     });
 
     function renderBtns() {
       if (choice === 0) {
-        btnYes.setContent(`{white-bg}{black-fg}[    Yes    ]{/}`);
+        btnYes.setContent(`{#ffffff-bg}{#000000-fg}[    Yes    ]{/}`);
         btnNo.setContent(`{${SECONDARY}-fg}     No     {/}`);
       } else {
         btnYes.setContent(`{${SECONDARY}-fg}     Yes    {/}`);
-        btnNo.setContent(`{white-bg}{black-fg}[    No     ]{/}`);
+        btnNo.setContent(`{#ffffff-bg}{#000000-fg}[    No     ]{/}`);
       }
       screen.render();
     }
@@ -581,12 +661,12 @@ function showComparison(allCardData, optimizedCart) {
   const div  = ' │ ';
 
   header('RESULTS — CHEAPEST AVAILABLE vs OPTIMISED PICK');
-  logBox.log(`{grey-fg}${'─'.repeat(w)}{/}`);
+  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
 
   logBox.log(
     `{bold}{${PRIMARY}-fg}${'CHEAPEST LISTING'.padEnd(half)}${div}OPTIMISED CART{/}`
   );
-  logBox.log(`{grey-fg}${'─'.repeat(w)}{/}`);
+  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
 
   // build name -> optimized item lookup
   const optMap = {};
@@ -638,12 +718,12 @@ function showCartResult(result) {
   } else {
     logBox.log(`{bold}{${PRIMARY}-fg}Cart done — ${failedItems.length} item(s) could not be added:{/}`);
     for (const item of failedItems) {
-      logBox.log(`{grey-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
+      logBox.log(`{#888888-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
     }
   }
 
   if (cookiePath) {
-    logBox.log(`{grey-fg}Session saved to: ${escape(cookiePath)}{/}`);
+    logBox.log(`{#888888-fg}Session saved to: ${escape(cookiePath)}{/}`);
   }
 
   logBox.log('');
@@ -656,9 +736,9 @@ function waitForKey(message) {
   return new Promise(resolve => {
     const hint = blessed.text({
       parent:  outerBox,
-      bottom:  0, left: 2, right: 2,
+      bottom:  1, left: 2, right: 2,
       content: message,
-      style:   { fg: ACCENT, bold: true },
+      style:   { fg: '#aaaaaa', bold: true },
       tags:    true,
     });
     screen.render();
@@ -671,6 +751,72 @@ function waitForKey(message) {
     }
     screen.key(['enter', 'space', 'q'], handler);
   });
+}
+
+// ── simple text input modal ────────────────────────────────────────────────
+
+function showTextInput(promptText, defaultVal = '') {
+  return new Promise(resolve => {
+    const km = makeKeyManager();
+
+    function done(value) {
+      km.cleanup();
+      box.destroy();
+      screen.render();
+      resolve(value || null);
+    }
+
+    const box = blessed.box({
+      parent: outerBox,
+      top: 'center', left: 'center',
+      width: 70, height: 8,
+      border: { type: 'line', fg: PRIMARY },
+      style:  { border: { fg: PRIMARY } },
+      tags:   true,
+    });
+
+    blessed.text({
+      parent: box,
+      top: 1, left: 2, right: 2,
+      content: promptText,
+      style:   { fg: SECONDARY },
+      tags:    false,
+    });
+
+    const inputBox = blessed.textbox({
+      parent:       box,
+      top: 3, left: 2, right: 2, height: 1,
+      style:        { fg: PRIMARY, bg: '#000000' },
+      inputOnFocus: true,
+    });
+
+    blessed.text({
+      parent:  box,
+      bottom:  1, left: 2,
+      content: 'ENTER: confirm   ESC: cancel',
+      style:   '#888888',
+      tags:    false,
+    });
+
+    inputBox.key(['enter', 'return'], () => done(inputBox.getValue().trim()));
+    km.add('escape', () => done(null));
+
+    if (defaultVal) inputBox.setValue(defaultVal);
+    inputBox.focus();
+    screen.render();
+  });
+}
+
+// ── welcome banner ────────────────────────────────────────────────────────
+
+function showWelcome() {
+  const w         = screen.cols || screen.width || 80;
+  const title     = 'Welcome to TCGScraper!';
+  const pad       = Math.max(0, Math.floor((w - title.length) / 2));
+  const separator = '='.repeat(w);
+  header(separator);
+  header(' '.repeat(pad) + title);
+  header(separator);
 }
 
 // ── shutdown ───────────────────────────────────────────────────────────────
@@ -686,10 +832,12 @@ module.exports = {
   log, header, muted,
   sectionClear,
   runSplash,
+  showWelcome,
   showGridSelect,
   showMultiSelect,
   showAutocomplete,
   showConfirm,
+  showTextInput,
   showProgress,
   showCartProgress,
   showComparison,
