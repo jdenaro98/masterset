@@ -1,0 +1,12 @@
+{
+  "name": "tcgscraper",
+  "version": "1.0.0",
+  "description": "TCGPlayer scraper with blessed TUI",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}
