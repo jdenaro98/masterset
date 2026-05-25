@@ -25,6 +25,23 @@ import traceback
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+
+def _platform_ua():
+    if sys.platform == "darwin":
+        return (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0)"
+            " Gecko/20100101 Firefox/150.0"
+        )
+    if sys.platform == "win32":
+        return (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0)"
+            " Gecko/20100101 Firefox/150.0"
+        )
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64; rv:150.0)"
+        " Gecko/20100101 Firefox/150.0"
+    )
+
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -81,10 +98,7 @@ def _boost(c, target=160):
 # ── API headers ───────────────────────────────────────────────────────────────
 
 _HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0)"
-        " Gecko/20100101 Firefox/150.0"
-    ),
+    "User-Agent": _platform_ua(),
     "Accept": "application/json, text/plain, */*",
     "Origin": "https://www.tcgplayer.com",
     "Referer": "https://www.tcgplayer.com/",
@@ -212,14 +226,7 @@ def handle_fetch_cards(params):
 
 def _fetch_one(product_id, max_listings):
     url = f"https://mp-search-api.tcgplayer.com/v1/product/{product_id}/listings"
-    hdrs = {
-        **_HEADERS,
-        "Content-Type": "application/json",
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0)"
-            " Gecko/20100101 Firefox/149.0"
-        ),
-    }
+    hdrs = {**_HEADERS, "Content-Type": "application/json"}
     all_listings, offset, size = [], 0, min(50, max_listings or 50)
     session = requests.Session()
     try:
