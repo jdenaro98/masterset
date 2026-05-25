@@ -1,10 +1,13 @@
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
+import urllib.request
 
 from playwright.sync_api import sync_playwright
-from playwright_stealth.stealth import Stealth
 
 
 def _log(msg):
@@ -12,46 +15,76 @@ def _log(msg):
     sys.stderr.flush()
 
 
+def _system_chrome_path():
+    """Return the installed Chrome executable path on any platform, or None."""
+    if sys.platform == "win32":
+        candidates = [
+            os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                         r"Google\Chrome\Application\chrome.exe"),
+            os.path.join(os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+                         r"Google\Chrome\Application\chrome.exe"),
+            os.path.join(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+                         r"Google\Chrome\Application\chrome.exe"),
+        ]
+        return next((p for p in candidates if p and os.path.isfile(p)), None)
+    elif sys.platform == "darwin":
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+        ]
+        return next((p for p in candidates if os.path.isfile(p)), None)
+    else:
+        for name in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
+            found = shutil.which(name)
+            if found:
+                return found
+        return None
+
+
+class _SubprocessBrowser:
+    def __init__(self, proc):
+        self._proc = proc
+
+    def stop(self):
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+
+
 def create_cart(optimized_cart, progress_callback=None):
     """
-    Add items to a TCGPlayer anonymous cart via Playwright.
+    Build an anonymous TCGPlayer cart and open it in system Chrome.
 
-    progress_callback(done, total, card_name) is called after each item attempt.
+    Playwright's bundled Chromium runs headlessly to make all API calls
+    (create cart, add items), then closes. System Chrome is launched with
+    a fresh temp profile and remote debugging enabled; cookies are injected
+    via CDP and Playwright immediately disconnects, leaving Chrome fully
+    uncontrolled for the user to log in.
 
-    Returns (cookie_path, failed_items, pw) where pw is the live Playwright
-    instance.  The caller must call pw.stop() when it is ready to close the
-    browser.
+    Returns (cookie_path, failed_items, browser_handle) where browser_handle
+    exposes a .stop() method the caller should invoke when done.
     """
     if not optimized_cart:
         _log("No items provided to create a cart.")
         return None, [], None
 
-    _log("Launching browser...")
+    user_data_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "user_data",
+    )
+    os.makedirs(user_data_dir, exist_ok=True)
+
+    _log("Building cart (headless)...")
     _pw = sync_playwright().start()
     try:
-        stealth = Stealth()
-        stealth.use_sync(_pw)
-        stealth.hook_playwright_context(_pw)
-
-        user_data_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "user_data",
-        )
         context = _pw.chromium.launch_persistent_context(
             user_data_dir,
-            headless=False,
+            headless=True,
             ignore_default_args=["--enable-automation"],
             args=[
-                "--window-size=1280,720",
                 "--disable-blink-features=AutomationControlled",
-                "--disable-infobars",
                 "--disable-notifications",
-                "--disable-features=TranslateUI",
-                "--disable-gpu",
             ],
         )
-        stealth.apply_stealth_sync(context)
-        context.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
         page = context.pages[0] if context.pages else context.new_page()
         page.set_default_navigation_timeout(60000)
 
@@ -82,19 +115,19 @@ def create_cart(optimized_cart, progress_callback=None):
                 f"Failed to create cart: HTTP {create_result['status']}:"
                 f" {create_result['text']}"
             )
-            return None, [], _pw
+            return None, [], None
 
         cart_data = json.loads(create_result["text"])
-        cart_key  = cart_data["results"][0]["cartKey"]
+        cart_key = cart_data["results"][0]["cartKey"]
         _log(f"Cart initialized: {cart_key}")
 
         context.add_cookies([{
-            "name":     "StoreCart_PRODUCTION",
-            "value":    f"CK={cart_key}&Ignore=false",
-            "domain":   ".tcgplayer.com",
-            "path":     "/",
+            "name": "StoreCart_PRODUCTION",
+            "value": f"CK={cart_key}&Ignore=false",
+            "domain": ".tcgplayer.com",
+            "path": "/",
             "httpOnly": False,
-            "secure":   True,
+            "secure": True,
             "sameSite": "Lax",
         }])
 
@@ -116,16 +149,16 @@ def create_cart(optimized_cart, progress_callback=None):
 
         total = len(optimized_cart)
         for done_count, item in enumerate(optimized_cart, start=1):
-            sku                = item.get("sku")
-            seller_key         = item.get("sellerKey")
+            sku = item.get("sku")
+            seller_key = item.get("sellerKey")
             custom_listing_key = item.get("custom_listing_key")
-            card_name          = item.get("card", "unknown card")
-            price              = item.get("price", 0)
+            card_name = item.get("card", "unknown card")
+            price = item.get("price", 0)
 
             if not sku and custom_listing_key in (None, "No Picture Linked", "N/A"):
                 failed_items.append({
-                    "card":   card_name,
-                    "sku":    None,
+                    "card": card_name,
+                    "sku": None,
                     "reason": "No listing found during optimization",
                 })
                 if progress_callback:
@@ -139,10 +172,10 @@ def create_cart(optimized_cart, progress_callback=None):
                 )
                 payload = {
                     "customListingKey": custom_listing_key,
-                    "priceAtAdd":       price,
-                    "quantityToBuy":    1,
-                    "channelId":        0,
-                    "countryCode":      "US",
+                    "priceAtAdd": price,
+                    "quantityToBuy": 1,
+                    "channelId": 0,
+                    "countryCode": "US",
                 }
             else:
                 add_url = (
@@ -150,13 +183,13 @@ def create_cart(optimized_cart, progress_callback=None):
                     "/item/add?mpfev=5143"
                 )
                 payload = {
-                    "sku":               sku,
-                    "sellerKey":         seller_key,
-                    "channelId":         0,
+                    "sku": sku,
+                    "sellerKey": seller_key,
+                    "channelId": 0,
                     "requestedQuantity": 1,
-                    "price":             price,
-                    "isDirect":          False,
-                    "countryCode":       "US",
+                    "price": price,
+                    "isDirect": False,
+                    "countryCode": "US",
                 }
 
             try:
@@ -164,24 +197,20 @@ def create_cart(optimized_cart, progress_callback=None):
                 if not result["ok"]:
                     _log(f"Failed to add {card_name}: HTTP {result['status']}")
                     failed_items.append({
-                        "card":   card_name,
-                        "sku":    sku,
+                        "card": card_name,
+                        "sku": sku,
                         "reason": f"HTTP {result['status']} (dead listing or out of stock)",
                     })
             except Exception as e:
                 _log(f"Error adding {card_name}: {e}")
                 failed_items.append({
-                    "card":   card_name,
-                    "sku":    sku,
+                    "card": card_name,
+                    "sku": sku,
                     "reason": f"Script error: {e}",
                 })
 
             if progress_callback:
                 progress_callback(done_count, total, card_name)
-
-        # Navigate to cart so it's visible when the user looks at the browser
-        _log("Opening cart...")
-        page.goto("https://www.tcgplayer.com/cart", wait_until="load")
 
         if failed_items:
             _log(f"{len(failed_items)} item(s) could not be added automatically.")
@@ -198,9 +227,67 @@ def create_cart(optimized_cart, progress_callback=None):
         except Exception as e:
             _log(f"Could not save cookies: {e}")
 
-        # Return the live Playwright instance — the caller keeps it alive until
-        # the user is done, then calls pw.stop() to close the browser.
-        return cookie_path, failed_items, _pw
+        all_cookies = context.cookies()
+        tcg_cookies = [c for c in all_cookies if "tcgplayer" in c.get("domain", "")]
+        _log(f"Collected {len(tcg_cookies)} TCGPlayer cookies to inject into Chrome")
+
+        context.close()
+        _pw.stop()
+
+        chrome_path = _system_chrome_path()
+        if not chrome_path:
+            _log("System Chrome not found — please open https://www.tcgplayer.com/cart manually.")
+            return cookie_path, failed_items, None
+
+        tmp_profile = tempfile.mkdtemp(prefix="pokescraper_")
+        _log("Launching Chrome with remote debugging...")
+        proc = subprocess.Popen([
+            chrome_path,
+            f"--user-data-dir={tmp_profile}",
+            "--remote-debugging-port=9222",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ])
+
+        cdp_ready = False
+        for _ in range(30):
+            try:
+                urllib.request.urlopen("http://localhost:9222/json/version", timeout=1)
+                cdp_ready = True
+                break
+            except Exception:
+                time.sleep(0.5)
+
+        if not cdp_ready:
+            _log("Chrome CDP not ready after 15 s — cart URL may not have cookies.")
+            return cookie_path, failed_items, _SubprocessBrowser(proc)
+
+        _log("Injecting cookies and navigating to cart...")
+        _pw2 = sync_playwright().start()
+        try:
+            browser = _pw2.chromium.connect_over_cdp("http://localhost:9222")
+            ctx2 = browser.contexts[0] if browser.contexts else browser.new_context()
+            if tcg_cookies:
+                ctx2.add_cookies(tcg_cookies)
+            page2 = ctx2.pages[0] if ctx2.pages else ctx2.new_page()
+            page2.goto("https://www.tcgplayer.com/cart", wait_until="domcontentloaded")
+        except Exception as e:
+            _log(f"CDP injection failed: {e}")
+        finally:
+            try:
+                _pw2.stop()
+            except Exception:
+                pass
+
+        _log("Cart loaded in Chrome — Playwright disconnected.")
+
+        class _ChromeBrowser:
+            def stop(self_):
+                if proc.poll() is None:
+                    proc.terminate()
+                shutil.rmtree(tmp_profile, ignore_errors=True)
+
+        return cookie_path, failed_items, _ChromeBrowser()
 
     except Exception:
         try:
