@@ -507,7 +507,7 @@ function showAutocomplete(choices, promptText) {
     sectionClear();
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  Type to filter   TAB: autocomplete   ↓/ENTER: confirm   ESC: back', 1, '#888888');
+    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
     const km = makeKeyManager();
@@ -550,16 +550,22 @@ function showAutocomplete(choices, promptText) {
       screen.render();
     }
 
-    inputBox.on('keypress', () => setImmediate(() => refresh(inputBox.getValue())));
-
-    inputBox.key('tab', () => {
-      const choice = filtered[dropList.selected] ?? filtered[0];
-      if (choice) {
-        inputBox.setValue(choice);
-        refresh(choice);
-        inputBox.focus();
-      }
+    inputBox.on('keypress', (ch, key) => {
+      if (key && (key.name === 'tab' || key.full === 'S-tab')) return;
+      setImmediate(() => refresh(inputBox.getValue()));
     });
+
+    function cycleSelection(dir) {
+      inputBox.setValue(inputBox.getValue().replace(/\t/g, ''));
+      if (filtered.length === 0) { screen.render(); return; }
+      const next = (dropList.selected + dir + filtered.length) % filtered.length;
+      dropList.select(next);
+      screen.render();
+      inputBox.focus();
+    }
+
+    inputBox.key('tab',   () => cycleSelection(+1));
+    inputBox.key('S-tab', () => cycleSelection(-1));
 
     inputBox.key('down', () => dropList.focus());
 
@@ -735,58 +741,41 @@ function showCartProgress(total) {
   };
 }
 
-// ── side-by-side results comparison ───────────────────────────────────────
+// ── side-by-side summary comparison ───────────────────────────────────────
 
-function showComparison(allCardData, optimizedCart) {
+function showCartComparison(first, optimized) {
   sectionClear();
 
   const w    = Math.max(60, (screen.width || 120) - 4);
-  const half = Math.floor(w / 2) - 2;
+  const half = Math.floor(w / 2) - 1;
   const div  = ' │ ';
 
-  header('RESULTS — CHEAPEST AVAILABLE vs OPTIMISED PICK');
+  const leftLines = [
+    'FIRST LISTING',
+    `  Unique sellers:    ${first.sellers}`,
+    `  Raw card cost:     $${first.rawCost.toFixed(2)}`,
+    `  Shipping:          $${first.shipping.toFixed(2)}`,
+    `  Estimated total:   $${first.total.toFixed(2)}`,
+  ];
+  const rightLines = [
+    'OPTIMIZED CART',
+    `  Unique sellers:    ${optimized.sellers}`,
+    `  Raw card cost:     $${optimized.rawCost.toFixed(2)}`,
+    `  Shipping:          $${optimized.shipping.toFixed(2)}`,
+    `  Estimated total:   $${optimized.total.toFixed(2)}`,
+  ];
+
   logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-
-  logBox.log(
-    `{bold}{${PRIMARY}-fg}${'CHEAPEST LISTING'.padEnd(half)}${div}OPTIMISED CART{/}`
-  );
-  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-
-  // build name -> optimized item lookup
-  const optMap = {};
-  for (const item of optimizedCart) optMap[item.card] = item;
-
-  for (const [, data] of Object.entries(allCardData)) {
-    const name     = data.card_info?.name || '?';
-    const listings = data.market_listings || [];
-    const opt      = optMap[name];
-
-    const nameWidth = Math.max(10, half - 26);
-    const nameTrunc = name.length > nameWidth
-      ? name.substring(0, nameWidth - 1) + '…'
-      : name;
-
-    let leftStr, rightStr;
-
-    if (listings.length) {
-      const b  = listings[0];
-      const sl = (b.seller || '').substring(0, 13);
-      leftStr  = `${nameTrunc.padEnd(nameWidth)} $${(b.price||0).toFixed(2)}+$${(b.shipping||0).toFixed(2)} ${sl}`;
+  for (let i = 0; i < leftLines.length; i++) {
+    const l = leftLines[i].padEnd(half);
+    const r = rightLines[i] || '';
+    if (i === 0) {
+      logBox.log(`{bold}{${SECONDARY}-fg}${escape(l)}{/}${div}{bold}{${PRIMARY}-fg}${escape(r)}{/}`);
     } else {
-      leftStr = `${nameTrunc.padEnd(nameWidth)} (no listings)`;
+      logBox.log(`{${SECONDARY}-fg}${escape(l)}{/}${div}{${PRIMARY}-fg}${escape(r)}{/}`);
     }
-
-    if (opt?.seller) {
-      const sl = opt.seller.substring(0, 15);
-      rightStr = `$${(opt.price||0).toFixed(2)}+$${(opt.shipping||0).toFixed(2)} via ${sl}`;
-    } else {
-      rightStr = '(not found)';
-    }
-
-    leftStr = leftStr.substring(0, half).padEnd(half);
-    logBox.log(`{${SECONDARY}-fg}${escape(leftStr)}{/}${div}{${PRIMARY}-fg}${escape(rightStr)}{/}`);
   }
-
+  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
   logBox.log('');
   screen.render();
 }
@@ -986,7 +975,7 @@ module.exports = {
   showFilePicker,
   showProgress,
   showCartProgress,
-  showComparison,
+  showCartComparison,
   showCartResult,
   waitForKey,
   shutdown,

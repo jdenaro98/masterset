@@ -83,6 +83,11 @@ def create_cart(optimized_cart, progress_callback=None):
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--disable-notifications",
+                "--disable-logging",
+                "--log-level=3",
+                "--disable-crash-reporter",
+                "--disable-component-update",
+                "--disable-background-networking",
             ],
         )
         page = context.pages[0] if context.pages else context.new_page()
@@ -247,7 +252,7 @@ def create_cart(optimized_cart, progress_callback=None):
             "--remote-debugging-port=9222",
             "--no-first-run",
             "--no-default-browser-check",
-        ])
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         cdp_ready = False
         for _ in range(30):

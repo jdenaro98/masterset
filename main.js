@@ -35,6 +35,7 @@ if (!process.env.TCGSCRAPER_BORDERED) {
     fs.chmodSync(tmp, 0o755);
     spawn('osascript', [
       '-e', `tell application "Terminal" to do script "${tmp}"`,
+      '-e', 'tell application "Terminal" to activate',
     ], { detached: true, stdio: 'ignore' }).unref();
   }
 
@@ -327,12 +328,20 @@ async function run() {
     return;
   }
 
-  // ── results: side-by-side comparison ─────────────────────────────────
-  ui.showComparison(allCardData, optimizedCart);
-  printCart(optimizedCart, 'Optimised Cart Summary');
+  // ── results: side-by-side summary comparison ─────────────────────────
+  const firstListingCart = Object.values(allCardData)
+    .map(data => {
+      const listings = data.market_listings || [];
+      if (!listings.length) return null;
+      const b = listings[0];
+      return { seller: b.seller, seller_id: b.seller_id, price: b.price || 0, shipping: b.shipping || 0, shipping_deal: b.shipping_deal };
+    })
+    .filter(Boolean);
+
+  ui.showCartComparison(buildSummary(firstListingCart), buildSummary(optimizedCart));
 
   const openBrowser = await ui.showConfirm(
-    'Open browser and add optimised items to cart?'
+    'Open browser and add optimized items to cart?'
   );
 
   if (openBrowser) {
@@ -364,16 +373,11 @@ async function run() {
   ui.shutdown();
 }
 
-function printCart(cart, title) {
+function buildSummary(cart) {
   const sellers  = new Set(cart.map(i => i.seller).filter(Boolean));
   const rawCost  = cart.reduce((s, i) => s + (i.price || 0), 0);
   const shipping = calcShipping(cart);
-
-  ui.header(title);
-  ui.log(`  Unique sellers:    ${sellers.size}`);
-  ui.log(`  Raw card cost:     $${rawCost.toFixed(2)}`);
-  ui.log(`  Shipping:          $${shipping.toFixed(2)}`);
-  ui.log(`  Estimated total:   $${(rawCost + shipping).toFixed(2)}`);
+  return { sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
 }
 
 function calcShipping(cart) {
