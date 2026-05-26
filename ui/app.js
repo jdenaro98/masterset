@@ -1,12 +1,15 @@
 'use strict';
 
-const blessed = require('blessed');
+const blessed      = require('blessed');
+const { spawn }    = require('child_process');
+const path         = require('path');
 const { spawnBackend, call, on: onEvent } = require('./ipc');
 
 // ── screen & outer border ──────────────────────────────────────────────────
 
 let screen, outerBox, logBox, activeWidget;
 let activeHints = [];
+let progressWidgets = [];
 let PRIMARY = '#ffffff', SECONDARY = '#b4dcff', ACCENT = '#8cc8b4';
 
 function rgb([r, g, b]) {
@@ -112,6 +115,8 @@ function sectionClear() {
   }
   for (const h of activeHints) h.destroy();
   activeHints = [];
+  for (const w of progressWidgets) { try { w.destroy(); } catch (_) {} }
+  progressWidgets = [];
   logBox.setContent('');
   logBox.show();
   screen.render();
@@ -123,17 +128,46 @@ function runSplash(artContent, primary) {
   return new Promise(resolve => {
     logBox.hide();
 
-    // Vertically center the sprite in the display area
-    const artLines   = artContent.split('\n');
-    const boxH       = Math.max(1, (screen.rows || screen.height || 40) - 2);
-    const topPad     = Math.max(0, Math.floor((boxH - artLines.length) / 2));
-    const displayContent = '\n'.repeat(topPad) + artContent;
+    // Parse ANSI true-color sequences into per-character {ch, r, g, b} data
+    function parseArt(content) {
+      const result = [];
+      for (const rawLine of content.split('\n')) {
+        const chars = [];
+        let i = 0, curR = null, curG = null, curB = null;
+        while (i < rawLine.length) {
+          if (rawLine[i] === '\x1b' && rawLine[i + 1] === '[') {
+            let j = i + 2;
+            while (j < rawLine.length && rawLine[j] !== 'm') j++;
+            const params = rawLine.slice(i + 2, j).split(';').map(Number);
+            if (params[0] === 0 || params.length === 0) {
+              curR = null; curG = null; curB = null;
+            } else if (params[0] === 38 && params[1] === 2 && params.length >= 5) {
+              curR = params[2]; curG = params[3]; curB = params[4];
+            }
+            i = j + 1;
+          } else {
+            chars.push({ ch: rawLine[i], r: curR, g: curG, b: curB });
+            i++;
+          }
+        }
+        result.push(chars);
+      }
+      return result;
+    }
+
+    const parsedLines = parseArt(artContent);
+    const artH        = parsedLines.length;
+    const maxArtWidth = Math.max(1, ...parsedLines.map(l => l.length));
+    const boxW        = Math.max(1, (screen.cols || screen.width || 120) - 2);
+    const boxH        = Math.max(1, (screen.rows || screen.height || 40) - 2);
+    const leftPad     = Math.max(0, Math.floor((boxW - maxArtWidth) / 2));
+    const topPad      = Math.max(0, Math.floor((boxH - artH) / 2));
+    const padStr      = ' '.repeat(leftPad);
 
     const artBox = blessed.box({
       parent:  outerBox,
       top: 0, left: 0, right: 0, bottom: 0,
-      tags:    false,
-      content: displayContent,
+      tags:    true,
       style:   { bg: '#000000' },
     });
 
@@ -141,10 +175,47 @@ function runSplash(artContent, primary) {
     const totalSteps = 90;
     const intervalMs = 35;
     const [r, g, b]  = primary;
+    const bandHW     = 0.15;
     let step = 0;
 
+    // Diagonal band sweeps TR→BL; shimmer blends each character's original color toward white
+    function buildShimmerContent(t) {
+      const bandPos = 1 - 2 * (step / totalSteps);
+      const lines   = [];
+      for (let i = 0; i < topPad; i++) lines.push('');
+      for (let row = 0; row < artH; row++) {
+        const parsedLine = parsedLines[row];
+        let out = padStr;
+        for (let col = 0; col < parsedLine.length; col++) {
+          const { ch, r: origR, g: origG, b: origB } = parsedLine[col];
+          if (ch === ' ') { out += ' '; continue; }
+          let fr = origR !== null ? origR : 200;
+          let fg = origG !== null ? origG : 200;
+          let fb = origB !== null ? origB : 200;
+          // Blend toward white in the shimmer band
+          const diag = (col / (maxArtWidth - 1 || 1)) - (row / (artH - 1 || 1));
+          const dist = Math.abs(diag - bandPos);
+          if (dist < bandHW) {
+            const blend = (1 - dist / bandHW) * t;
+            fr = Math.min(255, Math.round(fr + (255 - fr) * blend));
+            fg = Math.min(255, Math.round(fg + (255 - fg) * blend));
+            fb = Math.min(255, Math.round(fb + (255 - fb) * blend));
+          }
+          const rh = fr.toString(16).padStart(2, '0');
+          const gh = fg.toString(16).padStart(2, '0');
+          const bh = fb.toString(16).padStart(2, '0');
+          const esc = ch === '{' ? '\\{' : ch === '}' ? '\\}' : ch;
+          out += `{#${rh}${gh}${bh}-fg}${esc}{/}`;
+        }
+        lines.push(out);
+      }
+      return lines.join('\n');
+    }
+
+    artBox.setContent(buildShimmerContent(0));
+    screen.render();
+
     const timer = setInterval(() => {
-      // Fade-in/out envelope wraps 3 rapid shimmer pulses
       const envelope = Math.sin((step / totalSteps) * Math.PI);
       const pulse    = Math.abs(Math.sin((step / totalSteps) * Math.PI * 3));
       const t        = envelope * pulse;
@@ -155,12 +226,13 @@ function runSplash(artContent, primary) {
       const fb = Math.min(255, Math.round(b + (255 - b) * t * 0.85));
       outerBox.style.border.fg = rgb([fr, fg, fb]);
 
-      // Background aura behind the sprite (tints uncolored cells of the art)
+      // Background aura
       const bgR = Math.round(r * t * 0.25);
       const bgG = Math.round(g * t * 0.25);
       const bgB = Math.round(b * t * 0.25);
       artBox.style.bg = rgb([bgR, bgG, bgB]);
 
+      artBox.setContent(buildShimmerContent(t));
       screen.render();
       step++;
       if (step > totalSteps) {
@@ -199,7 +271,7 @@ function showGridSelect(items, promptText, opts = {}) {
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
 
-    const COLS = 3;
+    const COLS = opts.cols || 3;
     const rows = Math.ceil(items.length / COLS);
     let curRow = 0, curCol = 0;
     const km = makeKeyManager();
@@ -230,7 +302,7 @@ function showGridSelect(items, promptText, opts = {}) {
       for (let r = 0; r < rows; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx  = r * COLS + c;
+          const idx  = c * rows + r;
           if (idx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
@@ -257,7 +329,7 @@ function showGridSelect(items, promptText, opts = {}) {
     }
 
     function clampCol() {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol > maxCol) curCol = maxCol;
     }
 
@@ -265,7 +337,7 @@ function showGridSelect(items, promptText, opts = {}) {
     gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
     gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
     gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
     gridBox.key('pageup',   () => {
@@ -277,7 +349,7 @@ function showGridSelect(items, promptText, opts = {}) {
       clampCol(); render();
     });
     gridBox.key(['enter', 'return'], () => {
-      const idx = curRow * COLS + curCol;
+      const idx = curCol * rows + curRow;
       if (idx < items.length) cleanupAndResolve(items[idx]);
     });
 
@@ -343,7 +415,7 @@ function showMultiSelect(items, promptText, opts = {}) {
       for (let r = 0; r < rows; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx   = r * COLS + c;
+          const idx   = c * rows + r;
           if (idx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
@@ -377,7 +449,7 @@ function showMultiSelect(items, promptText, opts = {}) {
     }
 
     function clampCol() {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol > maxCol) curCol = maxCol;
     }
 
@@ -385,7 +457,7 @@ function showMultiSelect(items, promptText, opts = {}) {
     gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
     gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
     gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
     gridBox.key('pageup',   () => {
@@ -397,7 +469,7 @@ function showMultiSelect(items, promptText, opts = {}) {
       clampCol(); render();
     });
     gridBox.key('space', () => {
-      const idx = curRow * COLS + curCol;
+      const idx = curCol * rows + curRow;
       if (idx < items.length) {
         selected.has(idx) ? selected.delete(idx) : selected.add(idx);
         render();
@@ -560,7 +632,7 @@ function showConfirm(question) {
       parent: dlg,
       bottom: 1, left: 2,
       content: '←/→/TAB move   ENTER confirm   Y/N hotkeys',
-      style: '#888888',
+      style: { fg: '#888888' },
     });
 
     function renderBtns() {
@@ -592,27 +664,33 @@ function showProgress(total) {
   sectionClear();
   header('Scraping card listings…');
 
-  const barBox = blessed.progressbar({
+  const barTrack = blessed.box({
     parent: outerBox,
     top: 3, left: 1, right: 1, height: 1,
-    filled: 0,
-    style: { bar: { bg: PRIMARY } },
-    ch: '█',
+    style: { bg: '#111111' },
+  });
+  progressWidgets.push(barTrack);
+
+  const barFill = blessed.box({
+    parent: barTrack,
+    top: 0, left: 0, width: 0, height: 1,
+    style: { bg: PRIMARY },
   });
 
   const statusText = blessed.text({
     parent: outerBox,
-    top: 5, left: 1,
+    top: 5, left: 2,
     content: '',
     style: { fg: SECONDARY },
     tags: true,
   });
+  progressWidgets.push(statusText);
 
   let done = 0;
   return function update(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
-    barBox.setProgress(pct);
+    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
     screen.render();
   };
@@ -625,27 +703,33 @@ function showCartProgress(total) {
   header('Creating cart — adding items to TCGPlayer…');
   muted('  Browser is launching. This may take a minute.');
 
-  const barBox = blessed.progressbar({
+  const barTrack = blessed.box({
     parent: outerBox,
-    top: 4, left: 1, right: 1, height: 1,
-    filled: 0,
-    style: { bar: { bg: ACCENT } },
-    ch: '█',
+    bottom: 4, left: 1, right: 1, height: 1,
+    style: { bg: '#111111' },
+  });
+  progressWidgets.push(barTrack);
+
+  const barFill = blessed.box({
+    parent: barTrack,
+    top: 0, left: 0, width: 0, height: 1,
+    style: { bg: ACCENT },
   });
 
   const statusText = blessed.text({
     parent: outerBox,
-    top: 6, left: 1,
+    bottom: 2, left: 2,
     content: '',
     style: { fg: SECONDARY },
     tags: true,
   });
+  progressWidgets.push(statusText);
 
   let done = 0;
   return function update(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
-    barBox.setProgress(pct);
+    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
     screen.render();
   };
@@ -710,15 +794,18 @@ function showComparison(allCardData, optimizedCart) {
 // ── cart result display ────────────────────────────────────────────────────
 
 function showCartResult(result) {
+  for (const w of progressWidgets) { try { w.destroy(); } catch (_) {} }
+  progressWidgets = [];
+
   const { cookiePath, failedItems = [] } = result;
   logBox.log('');
 
   if (failedItems.length === 0) {
     logBox.log(`{bold}{${ACCENT}-fg}All items added to cart successfully!{/}`);
   } else {
-    logBox.log(`{bold}{${PRIMARY}-fg}Cart done — ${failedItems.length} item(s) could not be added:{/}`);
+    logBox.log(`{bold}{#ff9999-fg}Cart done — ${failedItems.length} item(s) could not be added:{/}`);
     for (const item of failedItems) {
-      logBox.log(`{#888888-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
+      logBox.log(`{#ffbbbb-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
     }
   }
 
@@ -794,7 +881,7 @@ function showTextInput(promptText, defaultVal = '') {
       parent:  box,
       bottom:  1, left: 2,
       content: 'ENTER: confirm   ESC: cancel',
-      style:   '#888888',
+      style:   { fg: '#888888' },
       tags:    false,
     });
 
@@ -810,13 +897,71 @@ function showTextInput(promptText, defaultVal = '') {
 // ── welcome banner ────────────────────────────────────────────────────────
 
 function showWelcome() {
-  const w         = screen.cols || screen.width || 80;
+  const w         = Math.max(10, (screen.cols || screen.width || 80) - 3);
   const title     = 'Welcome to TCGScraper!';
   const pad       = Math.max(0, Math.floor((w - title.length) / 2));
   const separator = '='.repeat(w);
   header(separator);
   header(' '.repeat(pad) + title);
   header(separator);
+}
+
+// ── native OS file picker (save / open) ───────────────────────────────────
+
+function showFilePicker(mode, defaultFilePath) {
+  const dir  = defaultFilePath ? path.dirname(path.resolve(defaultFilePath)) : process.cwd();
+  const base = defaultFilePath ? path.basename(defaultFilePath) : '';
+
+  return new Promise(resolve => {
+    let proc;
+
+    try {
+      if (process.platform === 'win32') {
+        const dlgType  = mode === 'save' ? 'SaveFileDialog' : 'OpenFileDialog';
+        const safeDir  = dir.replace(/'/g, "''");
+        const safeBase = base.replace(/'/g, "''");
+        const ps = [
+          'Add-Type -AssemblyName System.Windows.Forms',
+          `$d = New-Object System.Windows.Forms.${dlgType}`,
+          `$d.Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'`,
+          `$d.InitialDirectory = '${safeDir}'`,
+          safeBase ? `$d.FileName = '${safeBase}'` : '',
+          mode === 'save' ? "$d.DefaultExt = 'txt'" : '',
+          mode === 'save' ? '$d.AddExtension = $true' : '',
+          'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::WriteLine($d.FileName) }',
+        ].filter(Boolean).join('; ');
+        proc = spawn('powershell.exe', ['-NoProfile', '-Sta', '-NonInteractive', '-Command', ps], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } else {
+        const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+        const args = mode === 'save'
+          ? ['-e', `set r to (choose file name with prompt "${prompt}" default name "${base}")`,
+             '-e', 'set p to POSIX path of r',
+             '-e', 'if p does not end with ".txt" then set p to p & ".txt"',
+             '-e', 'return p']
+          : ['-e', `set r to (choose file of type {"public.plain-text", "txt"} with prompt "${prompt}")`,
+             '-e', 'return POSIX path of r'];
+        proc = spawn('osascript', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      }
+    } catch (_) {
+      proc = null;
+    }
+
+    if (!proc) {
+      const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+      resolve(showTextInput(prompt, base));
+      return;
+    }
+
+    let out = '';
+    proc.stdout.on('data', d => { out += d.toString(); });
+    proc.on('close', () => resolve(out.trim() || null));
+    proc.on('error', () => {
+      const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+      resolve(showTextInput(prompt, base));
+    });
+  });
 }
 
 // ── shutdown ───────────────────────────────────────────────────────────────
@@ -838,6 +983,7 @@ module.exports = {
   showAutocomplete,
   showConfirm,
   showTextInput,
+  showFilePicker,
   showProgress,
   showCartProgress,
   showComparison,

@@ -74,27 +74,35 @@ async function run() {
         return;
       }
       if (result.action === 'save') {
-        const fname = await ui.showTextInput('Save selected cards to file:', defaultFile);
-        if (fname) {
-          try {
-            fs.writeFileSync(fname, result.selected.join('\n'), 'utf8');
-            ui.muted(`Saved ${result.selected.length} card(s) to "${fname}".`);
-          } catch (e) {
-            ui.muted(`Save failed: ${e.message}`);
-          }
+        if (result.selected.length === 0) {
+          ui.sectionClear();
+          ui.muted('No cards selected — nothing to save.');
           await new Promise(r => setTimeout(r, 900));
+        } else {
+          const fname = await ui.showFilePicker('save', path.join(process.cwd(), defaultFile));
+          if (fname) {
+            ui.sectionClear();
+            try {
+              fs.writeFileSync(fname, result.selected.join('\n'), 'utf8');
+              ui.muted(`Saved ${result.selected.length} card(s) to "${path.basename(fname)}".`);
+            } catch (e) {
+              ui.muted(`Save failed: ${e.message}`);
+            }
+            await new Promise(r => setTimeout(r, 900));
+          }
         }
         initial = result.selected;
       } else if (result.action === 'load') {
-        const fname = await ui.showTextInput('Load cards from file:', defaultFile);
+        const fname = await ui.showFilePicker('open', path.join(process.cwd(), defaultFile));
         if (fname) {
+          ui.sectionClear();
           try {
             const lines = fs.readFileSync(fname, 'utf8')
               .split('\n').map(l => l.trim()).filter(Boolean);
             const valid = lines.filter(n => allCardNames.includes(n));
             const skipped = lines.length - valid.length;
             if (skipped > 0) ui.muted(`${skipped} name(s) not in this set — skipped.`);
-            ui.muted(`Loaded ${valid.length} card(s) from "${fname}".`);
+            ui.muted(`Loaded ${valid.length} card(s) from "${path.basename(fname)}".`);
             await new Promise(r => setTimeout(r, 900));
             initial = valid;
           } catch (e) {
@@ -114,6 +122,7 @@ async function run() {
 
   // 2. Start backend
   ipc.spawnBackend();
+  ipc.on('backend_log', msg => ui.muted(msg.text));
 
   // 3. Load theme + splash
   ui.header('Loading…');
@@ -215,7 +224,8 @@ async function run() {
     ];
     const scrapeChoice = await ui.showGridSelect(
       scrapeOpts,
-      `Set: ${setName} — How would you like to scrape?`
+      `Set: ${setName} — How would you like to scrape?`,
+      { cols: 1 }
     );
     if (!scrapeChoice) continue;
 
