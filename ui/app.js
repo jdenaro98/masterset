@@ -1,18 +1,37 @@
 'use strict';
 
-const blessed = require('blessed');
+const blessed      = require('blessed');
+const { spawn }    = require('child_process');
+const fs           = require('fs');
+const path         = require('path');
 const { spawnBackend, call, on: onEvent } = require('./ipc');
 
 // ── screen & outer border ──────────────────────────────────────────────────
 
 let screen, outerBox, logBox, activeWidget;
+let activeHints = [];
+let progressWidgets = [];
 let PRIMARY = '#ffffff', SECONDARY = '#b4dcff', ACCENT = '#8cc8b4';
 
 function rgb([r, g, b]) {
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
+function desaturate([r, g, b], factor) {
+  const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  return [
+    Math.round(gray + (r - gray) * factor),
+    Math.round(gray + (g - gray) * factor),
+    Math.round(gray + (b - gray) * factor),
+  ];
+}
+
 function initScreen() {
+  // Request a comfortable window size via VT sequence (Windows Terminal + xterm-compatible).
+  // By the time runSplash is called (after async IPC), the terminal will have resized
+  // and blessed will have received SIGWINCH with the updated dimensions.
+  process.stdout.write('\x1b[8;50;160t');
+
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
@@ -24,7 +43,7 @@ function initScreen() {
     parent: screen,
     top: 0, left: 0, width: '100%', height: '100%',
     border: { type: 'line', fg: PRIMARY },
-    style:  { border: { fg: PRIMARY } },
+    style:  { border: { fg: PRIMARY }, bg: '#000000' },
   });
 
   logBox = blessed.log({
@@ -42,9 +61,11 @@ function initScreen() {
 }
 
 function applyTheme(primary, secondary, accent) {
-  PRIMARY   = rgb(primary);
-  SECONDARY = rgb(secondary);
-  ACCENT    = rgb(accent);
+  const isWin = process.platform === 'win32';
+  const tune  = isWin ? c => desaturate(c, 0.50) : c => c;
+  PRIMARY   = rgb(tune(primary));
+  SECONDARY = rgb(tune(secondary));
+  ACCENT    = rgb(tune(accent));
   if (outerBox) {
     outerBox.style.border.fg = PRIMARY;
     screen.render();
@@ -65,7 +86,7 @@ function header(text) {
 }
 
 function muted(text) {
-  logBox.log(`{grey-fg}${escape(text)}{/}`);
+  logBox.log(`{#888888-fg}${escape(text)}{/}`);
   screen.render();
 }
 
@@ -75,14 +96,59 @@ function escape(t) {
 
 // ── section transitions ────────────────────────────────────────────────────
 
+function hintWidget(text, row, hexColor) {
+  const color = hexColor || '#cccccc';
+  const w = blessed.text({
+    parent:  outerBox,
+    top: row, left: 1, right: 1, height: 1,
+    content: `{${color}-fg}${escape(text)}{/}`,
+    style:   { bg: '#000000' },
+    tags:    true,
+  });
+  activeHints.push(w);
+  return w;
+}
+
 function sectionClear() {
   if (activeWidget) {
     activeWidget.destroy();
     activeWidget = null;
   }
+  for (const h of activeHints) h.destroy();
+  activeHints = [];
+  for (const w of progressWidgets) { try { w.destroy(); } catch (_) {} }
+  progressWidgets = [];
   logBox.setContent('');
   logBox.show();
   screen.render();
+}
+
+// ── ANSI art parser ────────────────────────────────────────────────────────
+
+function parseArtColors(content) {
+  const result = [];
+  for (const rawLine of content.split('\n')) {
+    const chars = [];
+    let i = 0, curR = null, curG = null, curB = null;
+    while (i < rawLine.length) {
+      if (rawLine[i] === '\x1b' && rawLine[i + 1] === '[') {
+        let j = i + 2;
+        while (j < rawLine.length && rawLine[j] !== 'm') j++;
+        const params = rawLine.slice(i + 2, j).split(';').map(Number);
+        if (params[0] === 0 || params.length === 0) {
+          curR = null; curG = null; curB = null;
+        } else if (params[0] === 38 && params[1] === 2 && params.length >= 5) {
+          curR = params[2]; curG = params[3]; curB = params[4];
+        }
+        i = j + 1;
+      } else {
+        chars.push({ ch: rawLine[i], r: curR, g: curG, b: curB });
+        i++;
+      }
+    }
+    result.push(chars);
+  }
+  return result;
 }
 
 // ── splash ─────────────────────────────────────────────────────────────────
@@ -90,25 +156,88 @@ function sectionClear() {
 function runSplash(artContent, primary) {
   return new Promise(resolve => {
     logBox.hide();
+
+    const parsedLines = parseArtColors(artContent);
+    const artH        = parsedLines.length;
+    const maxArtWidth = Math.max(1, ...parsedLines.map(l => l.length));
+    const boxW        = Math.max(1, (screen.cols || screen.width || 120) - 2);
+    const boxH        = Math.max(1, (screen.rows || screen.height || 40) - 2);
+    const leftPad     = Math.max(0, Math.floor((boxW - maxArtWidth) / 2));
+    const topPad      = Math.max(0, Math.floor((boxH - artH) / 2));
+    const padStr      = ' '.repeat(leftPad);
+
     const artBox = blessed.box({
       parent:  outerBox,
       top: 0, left: 0, right: 0, bottom: 0,
-      tags:    false,
-      content: artContent,
+      tags:    true,
+      style:   { bg: '#000000' },
     });
 
-    const steps = 24;
+    // 3 shimmer pulses over ~3 seconds (~28 fps)
+    const totalSteps = 90;
+    const intervalMs = 35;
+    const [r, g, b]  = primary;
+    const bandHW     = 0.15;
     let step = 0;
-    const [r, g, b] = primary;
+
+    // Diagonal band sweeps TR→BL; shimmer blends each character's original color toward white
+    function buildShimmerContent(t) {
+      const bandPos = 1 - 2 * (step / totalSteps);
+      const lines   = [];
+      for (let i = 0; i < topPad; i++) lines.push('');
+      for (let row = 0; row < artH; row++) {
+        const parsedLine = parsedLines[row];
+        let out = padStr;
+        for (let col = 0; col < parsedLine.length; col++) {
+          const { ch, r: origR, g: origG, b: origB } = parsedLine[col];
+          if (ch === ' ') { out += ' '; continue; }
+          let fr = origR !== null ? origR : 200;
+          let fg = origG !== null ? origG : 200;
+          let fb = origB !== null ? origB : 200;
+          // Blend toward white in the shimmer band
+          const diag = (col / (maxArtWidth - 1 || 1)) - (row / (artH - 1 || 1));
+          const dist = Math.abs(diag - bandPos);
+          if (dist < bandHW) {
+            const blend = (1 - dist / bandHW) * t;
+            fr = Math.min(255, Math.round(fr + (255 - fr) * blend));
+            fg = Math.min(255, Math.round(fg + (255 - fg) * blend));
+            fb = Math.min(255, Math.round(fb + (255 - fb) * blend));
+          }
+          const rh = fr.toString(16).padStart(2, '0');
+          const gh = fg.toString(16).padStart(2, '0');
+          const bh = fb.toString(16).padStart(2, '0');
+          const esc = ch === '{' ? '\\{' : ch === '}' ? '\\}' : ch;
+          out += `{#${rh}${gh}${bh}-fg}${esc}{/}`;
+        }
+        lines.push(out);
+      }
+      return lines.join('\n');
+    }
+
+    artBox.setContent(buildShimmerContent(0));
+    screen.render();
+
     const timer = setInterval(() => {
-      const t  = Math.sin((step / steps) * Math.PI);
-      const fr = Math.min(255, Math.round(r + (255 - r) * t * 0.6));
-      const fg = Math.min(255, Math.round(g + (255 - g) * t * 0.6));
-      const fb = Math.min(255, Math.round(b + (255 - b) * t * 0.6));
+      const envelope = Math.sin((step / totalSteps) * Math.PI);
+      const pulse    = Math.abs(Math.sin((step / totalSteps) * Math.PI * 3));
+      const t        = envelope * pulse;
+
+      // Border glow
+      const fr = Math.min(255, Math.round(r + (255 - r) * t * 0.85));
+      const fg = Math.min(255, Math.round(g + (255 - g) * t * 0.85));
+      const fb = Math.min(255, Math.round(b + (255 - b) * t * 0.85));
       outerBox.style.border.fg = rgb([fr, fg, fb]);
+
+      // Background aura
+      const bgR = Math.round(r * t * 0.25);
+      const bgG = Math.round(g * t * 0.25);
+      const bgB = Math.round(b * t * 0.25);
+      artBox.style.bg = rgb([bgR, bgG, bgB]);
+
+      artBox.setContent(buildShimmerContent(t));
       screen.render();
       step++;
-      if (step > steps) {
+      if (step > totalSteps) {
         clearInterval(timer);
         outerBox.style.border.fg = PRIMARY;
         artBox.destroy();
@@ -116,7 +245,7 @@ function runSplash(artContent, primary) {
         screen.render();
         resolve();
       }
-    }, 40);
+    }, intervalMs);
   });
 }
 
@@ -141,9 +270,10 @@ function makeKeyManager() {
 function showGridSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
 
-    const COLS = 3;
+    const COLS = opts.cols || 3;
     const rows = Math.ceil(items.length / COLS);
     let curRow = 0, curCol = 0;
     const km = makeKeyManager();
@@ -174,7 +304,7 @@ function showGridSelect(items, promptText, opts = {}) {
       for (let r = 0; r < rows; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx  = r * COLS + c;
+          const idx  = c * rows + r;
           if (idx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
@@ -185,7 +315,7 @@ function showGridSelect(items, promptText, opts = {}) {
             ? name.substring(0, maxText - 1) + '…'
             : name.padEnd(maxText);
           line += isCur
-            ? `{white-bg}{black-fg} ${escape(cell)} {/}`
+            ? `{#ffffff-bg}{#000000-fg} ${escape(cell)} {/}`
             : `{${SECONDARY}-fg} ${escape(cell)} {/}`;
         }
         lines.push(line);
@@ -201,7 +331,7 @@ function showGridSelect(items, promptText, opts = {}) {
     }
 
     function clampCol() {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol > maxCol) curCol = maxCol;
     }
 
@@ -209,7 +339,7 @@ function showGridSelect(items, promptText, opts = {}) {
     gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
     gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
     gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
     gridBox.key('pageup',   () => {
@@ -221,7 +351,7 @@ function showGridSelect(items, promptText, opts = {}) {
       clampCol(); render();
     });
     gridBox.key(['enter', 'return'], () => {
-      const idx = curRow * COLS + curCol;
+      const idx = curCol * rows + curRow;
       if (idx < items.length) cleanupAndResolve(items[idx]);
     });
 
@@ -240,15 +370,24 @@ function showGridSelect(items, promptText, opts = {}) {
 
 // ── 3-column multi-select ──────────────────────────────────────────────────
 
-function showMultiSelect(items, promptText) {
+function showMultiSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
-    header('  SPACE: toggle   ENTER: confirm   ESC: cancel');
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
+    hintWidget('  SPACE: toggle   ENTER: confirm   S: save   L: load   R: restart   Q: quit', 1, '#888888');
 
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
     const selected = new Set();
+
+    if (opts.initialSelected) {
+      for (const name of opts.initialSelected) {
+        const idx = items.indexOf(name);
+        if (idx >= 0) selected.add(idx);
+      }
+    }
+
     let curRow = 0, curCol = 0;
     const km = makeKeyManager();
 
@@ -278,7 +417,7 @@ function showMultiSelect(items, promptText) {
       for (let r = 0; r < rows; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx   = r * COLS + c;
+          const idx   = c * rows + r;
           if (idx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
@@ -292,7 +431,7 @@ function showMultiSelect(items, promptText) {
             : name.padEnd(maxText);
           const text = escape(prefix + cell);
           if (isCur) {
-            line += `{white-bg}{black-fg} ${text} {/}`;
+            line += `{#ffffff-bg}{#000000-fg} ${text} {/}`;
           } else if (isSel) {
             line += `{${PRIMARY}-fg} ${text} {/}`;
           } else {
@@ -312,7 +451,7 @@ function showMultiSelect(items, promptText) {
     }
 
     function clampCol() {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol > maxCol) curCol = maxCol;
     }
 
@@ -320,7 +459,7 @@ function showMultiSelect(items, promptText) {
     gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
     gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
     gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, items.length - 1 - curRow * COLS);
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
     gridBox.key('pageup',   () => {
@@ -332,16 +471,30 @@ function showMultiSelect(items, promptText) {
       clampCol(); render();
     });
     gridBox.key('space', () => {
-      const idx = curRow * COLS + curCol;
+      const idx = curCol * rows + curRow;
       if (idx < items.length) {
         selected.has(idx) ? selected.delete(idx) : selected.add(idx);
         render();
       }
     });
+    const toNames = () => [...selected].sort((a, b) => a - b).map(i => items[i]);
+
     gridBox.key(['enter', 'return'], () => {
-      cleanupAndResolve([...selected].sort((a, b) => a - b).map(i => items[i]));
+      cleanupAndResolve({ action: 'confirm', selected: toNames() });
     });
-    km.add('escape', () => cleanupAndResolve([]));
+    gridBox.key(['s', 'S'], () => {
+      cleanupAndResolve({ action: 'save', selected: toNames() });
+    });
+    gridBox.key(['l', 'L'], () => {
+      cleanupAndResolve({ action: 'load', selected: toNames() });
+    });
+    gridBox.key(['r', 'R'], () => {
+      cleanupAndResolve({ action: 'restart', selected: [] });
+    });
+    gridBox.key(['q', 'Q'], () => {
+      cleanupAndResolve({ action: 'exit', selected: [] });
+    });
+    km.add('escape', () => cleanupAndResolve({ action: 'restart', selected: [] }));
 
     gridBox.focus();
     activeWidget = gridBox;
@@ -354,8 +507,9 @@ function showMultiSelect(items, promptText) {
 function showAutocomplete(choices, promptText) {
   return new Promise(resolve => {
     sectionClear();
-    header(promptText);
-    header('  Type to filter   TAB: autocomplete   ↓/ENTER: confirm   ESC: back');
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
+    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
     const km = makeKeyManager();
@@ -371,7 +525,7 @@ function showAutocomplete(choices, promptText) {
     const inputBox = blessed.textbox({
       parent: outerBox,
       top: 3, left: 1, right: 1, height: 1,
-      style: { fg: PRIMARY, bg: 'black' },
+      style: { fg: PRIMARY, bg: '#000000' },
       inputOnFocus: true,
     });
 
@@ -386,7 +540,7 @@ function showAutocomplete(choices, promptText) {
       scrollbar: { ch: '│' },
       items: filtered,
       style: {
-        selected: { bg: 'white', fg: 'black', bold: true },
+        selected: { bg: '#ffffff', fg: '#000000', bold: true },
         item:     { fg: SECONDARY },
       },
       tags: false,
@@ -398,16 +552,22 @@ function showAutocomplete(choices, promptText) {
       screen.render();
     }
 
-    inputBox.on('keypress', () => setImmediate(() => refresh(inputBox.getValue())));
-
-    inputBox.key('tab', () => {
-      const choice = filtered[dropList.selected] ?? filtered[0];
-      if (choice) {
-        inputBox.setValue(choice);
-        refresh(choice);
-        inputBox.focus();
-      }
+    inputBox.on('keypress', (ch, key) => {
+      if (key && (key.name === 'tab' || key.full === 'S-tab')) return;
+      setImmediate(() => refresh(inputBox.getValue()));
     });
+
+    function cycleSelection(dir) {
+      inputBox.setValue(inputBox.getValue().replace(/\t/g, ''));
+      if (filtered.length === 0) { screen.render(); return; }
+      const next = (dropList.selected + dir + filtered.length) % filtered.length;
+      dropList.select(next);
+      screen.render();
+      inputBox.focus();
+    }
+
+    inputBox.key('tab',   () => cycleSelection(+1));
+    inputBox.key('S-tab', () => cycleSelection(-1));
 
     inputBox.key('down', () => dropList.focus());
 
@@ -478,18 +638,18 @@ function showConfirm(question) {
 
     blessed.text({
       parent: dlg,
-      bottom: 0, left: 2,
+      bottom: 1, left: 2,
       content: '←/→/TAB move   ENTER confirm   Y/N hotkeys',
-      style: { fg: 'grey' },
+      style: { fg: '#888888' },
     });
 
     function renderBtns() {
       if (choice === 0) {
-        btnYes.setContent(`{white-bg}{black-fg}[    Yes    ]{/}`);
+        btnYes.setContent(`{#ffffff-bg}{#000000-fg}[    Yes    ]{/}`);
         btnNo.setContent(`{${SECONDARY}-fg}     No     {/}`);
       } else {
         btnYes.setContent(`{${SECONDARY}-fg}     Yes    {/}`);
-        btnNo.setContent(`{white-bg}{black-fg}[    No     ]{/}`);
+        btnNo.setContent(`{#ffffff-bg}{#000000-fg}[    No     ]{/}`);
       }
       screen.render();
     }
@@ -512,27 +672,33 @@ function showProgress(total) {
   sectionClear();
   header('Scraping card listings…');
 
-  const barBox = blessed.progressbar({
+  const barTrack = blessed.box({
     parent: outerBox,
     top: 3, left: 1, right: 1, height: 1,
-    filled: 0,
-    style: { bar: { bg: PRIMARY } },
-    ch: '█',
+    style: { bg: '#111111' },
+  });
+  progressWidgets.push(barTrack);
+
+  const barFill = blessed.box({
+    parent: barTrack,
+    top: 0, left: 0, width: 0, height: 1,
+    style: { bg: PRIMARY },
   });
 
   const statusText = blessed.text({
     parent: outerBox,
-    top: 5, left: 1,
+    top: 5, left: 2,
     content: '',
     style: { fg: SECONDARY },
     tags: true,
   });
+  progressWidgets.push(statusText);
 
   let done = 0;
   return function update(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
-    barBox.setProgress(pct);
+    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
     screen.render();
   };
@@ -545,84 +711,73 @@ function showCartProgress(total) {
   header('Creating cart — adding items to TCGPlayer…');
   muted('  Browser is launching. This may take a minute.');
 
-  const barBox = blessed.progressbar({
+  const barTrack = blessed.box({
     parent: outerBox,
-    top: 4, left: 1, right: 1, height: 1,
-    filled: 0,
-    style: { bar: { bg: ACCENT } },
-    ch: '█',
+    bottom: 4, left: 1, right: 1, height: 1,
+    style: { bg: '#111111' },
+  });
+  progressWidgets.push(barTrack);
+
+  const barFill = blessed.box({
+    parent: barTrack,
+    top: 0, left: 0, width: 0, height: 1,
+    style: { bg: ACCENT },
   });
 
   const statusText = blessed.text({
     parent: outerBox,
-    top: 6, left: 1,
+    bottom: 2, left: 2,
     content: '',
     style: { fg: SECONDARY },
     tags: true,
   });
+  progressWidgets.push(statusText);
 
   let done = 0;
   return function update(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
-    barBox.setProgress(pct);
+    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
     screen.render();
   };
 }
 
-// ── side-by-side results comparison ───────────────────────────────────────
+// ── side-by-side summary comparison ───────────────────────────────────────
 
-function showComparison(allCardData, optimizedCart) {
+function showCartComparison(first, optimized) {
   sectionClear();
 
   const w    = Math.max(60, (screen.width || 120) - 4);
-  const half = Math.floor(w / 2) - 2;
+  const half = Math.floor(w / 2) - 1;
   const div  = ' │ ';
 
-  header('RESULTS — CHEAPEST AVAILABLE vs OPTIMISED PICK');
-  logBox.log(`{grey-fg}${'─'.repeat(w)}{/}`);
+  const leftLines = [
+    'FIRST LISTING',
+    `  Unique sellers:    ${first.sellers}`,
+    `  Raw card cost:     $${first.rawCost.toFixed(2)}`,
+    `  Shipping:          $${first.shipping.toFixed(2)}`,
+    `  Estimated total:   $${first.total.toFixed(2)}`,
+  ];
+  const rightLines = [
+    'OPTIMIZED CART',
+    `  Unique sellers:    ${optimized.sellers}`,
+    `  Raw card cost:     $${optimized.rawCost.toFixed(2)}`,
+    `  Shipping:          $${optimized.shipping.toFixed(2)}`,
+    `  Estimated total:   $${optimized.total.toFixed(2)}`,
+  ];
 
-  logBox.log(
-    `{bold}{${PRIMARY}-fg}${'CHEAPEST LISTING'.padEnd(half)}${div}OPTIMISED CART{/}`
-  );
-  logBox.log(`{grey-fg}${'─'.repeat(w)}{/}`);
-
-  // build name -> optimized item lookup
-  const optMap = {};
-  for (const item of optimizedCart) optMap[item.card] = item;
-
-  for (const [, data] of Object.entries(allCardData)) {
-    const name     = data.card_info?.name || '?';
-    const listings = data.market_listings || [];
-    const opt      = optMap[name];
-
-    const nameWidth = Math.max(10, half - 26);
-    const nameTrunc = name.length > nameWidth
-      ? name.substring(0, nameWidth - 1) + '…'
-      : name;
-
-    let leftStr, rightStr;
-
-    if (listings.length) {
-      const b  = listings[0];
-      const sl = (b.seller || '').substring(0, 13);
-      leftStr  = `${nameTrunc.padEnd(nameWidth)} $${(b.price||0).toFixed(2)}+$${(b.shipping||0).toFixed(2)} ${sl}`;
+  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
+  for (let i = 0; i < leftLines.length; i++) {
+    const l = leftLines[i].padEnd(half);
+    const r = rightLines[i] || '';
+    if (i === 0) {
+      logBox.log(`{bold}{${SECONDARY}-fg}${escape(l)}{/}${div}{bold}{${PRIMARY}-fg}${escape(r)}{/}`);
     } else {
-      leftStr = `${nameTrunc.padEnd(nameWidth)} (no listings)`;
+      logBox.log(`{${SECONDARY}-fg}${escape(l)}{/}${div}{${PRIMARY}-fg}${escape(r)}{/}`);
     }
-
-    if (opt?.seller) {
-      const sl = opt.seller.substring(0, 15);
-      rightStr = `$${(opt.price||0).toFixed(2)}+$${(opt.shipping||0).toFixed(2)} via ${sl}`;
-    } else {
-      rightStr = '(not found)';
-    }
-
-    leftStr = leftStr.substring(0, half).padEnd(half);
-    logBox.log(`{${SECONDARY}-fg}${escape(leftStr)}{/}${div}{${PRIMARY}-fg}${escape(rightStr)}{/}`);
   }
-
+  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
   logBox.log('');
   screen.render();
 }
@@ -630,20 +785,23 @@ function showComparison(allCardData, optimizedCart) {
 // ── cart result display ────────────────────────────────────────────────────
 
 function showCartResult(result) {
+  for (const w of progressWidgets) { try { w.destroy(); } catch (_) {} }
+  progressWidgets = [];
+
   const { cookiePath, failedItems = [] } = result;
   logBox.log('');
 
   if (failedItems.length === 0) {
     logBox.log(`{bold}{${ACCENT}-fg}All items added to cart successfully!{/}`);
   } else {
-    logBox.log(`{bold}{${PRIMARY}-fg}Cart done — ${failedItems.length} item(s) could not be added:{/}`);
+    logBox.log(`{bold}{#ff9999-fg}Cart done — ${failedItems.length} item(s) could not be added:{/}`);
     for (const item of failedItems) {
-      logBox.log(`{grey-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
+      logBox.log(`{#ffbbbb-fg}  • ${escape(item.card)}: ${escape(item.reason)}{/}`);
     }
   }
 
   if (cookiePath) {
-    logBox.log(`{grey-fg}Session saved to: ${escape(cookiePath)}{/}`);
+    logBox.log(`{#888888-fg}Session saved to: ${escape(cookiePath)}{/}`);
   }
 
   logBox.log('');
@@ -656,9 +814,9 @@ function waitForKey(message) {
   return new Promise(resolve => {
     const hint = blessed.text({
       parent:  outerBox,
-      bottom:  0, left: 2, right: 2,
+      bottom:  1, left: 2, right: 2,
       content: message,
-      style:   { fg: ACCENT, bold: true },
+      style:   { fg: '#aaaaaa', bold: true },
       tags:    true,
     });
     screen.render();
@@ -670,6 +828,256 @@ function waitForKey(message) {
       resolve();
     }
     screen.key(['enter', 'space', 'q'], handler);
+  });
+}
+
+// ── simple text input modal ────────────────────────────────────────────────
+
+function showTextInput(promptText, defaultVal = '') {
+  return new Promise(resolve => {
+    const km = makeKeyManager();
+
+    function done(value) {
+      km.cleanup();
+      box.destroy();
+      screen.render();
+      resolve(value || null);
+    }
+
+    const box = blessed.box({
+      parent: outerBox,
+      top: 'center', left: 'center',
+      width: 70, height: 8,
+      border: { type: 'line', fg: PRIMARY },
+      style:  { border: { fg: PRIMARY } },
+      tags:   true,
+    });
+
+    blessed.text({
+      parent: box,
+      top: 1, left: 2, right: 2,
+      content: promptText,
+      style:   { fg: SECONDARY },
+      tags:    false,
+    });
+
+    const inputBox = blessed.textbox({
+      parent:       box,
+      top: 3, left: 2, right: 2, height: 1,
+      style:        { fg: PRIMARY, bg: '#000000' },
+      inputOnFocus: true,
+    });
+
+    blessed.text({
+      parent:  box,
+      bottom:  1, left: 2,
+      content: 'ENTER: confirm   ESC: cancel',
+      style:   { fg: '#888888' },
+      tags:    false,
+    });
+
+    inputBox.key(['enter', 'return'], () => done(inputBox.getValue().trim()));
+    km.add('escape', () => done(null));
+
+    if (defaultVal) inputBox.setValue(defaultVal);
+    inputBox.focus();
+    screen.render();
+  });
+}
+
+// ── welcome banner ────────────────────────────────────────────────────────
+
+function showWelcome() {
+  const w         = Math.max(10, (screen.cols || screen.width || 80) - 3);
+  const title     = 'Welcome to TCGScraper!';
+  const pad       = Math.max(0, Math.floor((w - title.length) / 2));
+  const separator = '='.repeat(w);
+  header(separator);
+  header(' '.repeat(pad) + title);
+  header(separator);
+}
+
+// ── native OS file picker (save / open) ───────────────────────────────────
+
+function showFilePicker(mode, defaultFilePath) {
+  const dir  = defaultFilePath ? path.dirname(path.resolve(defaultFilePath)) : process.cwd();
+  const base = defaultFilePath ? path.basename(defaultFilePath) : '';
+
+  return new Promise(resolve => {
+    let proc;
+
+    try {
+      if (process.platform === 'win32') {
+        const dlgType  = mode === 'save' ? 'SaveFileDialog' : 'OpenFileDialog';
+        const safeDir  = dir.replace(/'/g, "''");
+        const safeBase = base.replace(/'/g, "''");
+        const ps = [
+          'Add-Type -AssemblyName System.Windows.Forms',
+          `$d = New-Object System.Windows.Forms.${dlgType}`,
+          `$d.Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'`,
+          `$d.InitialDirectory = '${safeDir}'`,
+          safeBase ? `$d.FileName = '${safeBase}'` : '',
+          mode === 'save' ? "$d.DefaultExt = 'txt'" : '',
+          mode === 'save' ? '$d.AddExtension = $true' : '',
+          'if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::WriteLine($d.FileName) }',
+        ].filter(Boolean).join('; ');
+        proc = spawn('powershell.exe', ['-NoProfile', '-Sta', '-NonInteractive', '-Command', ps], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      } else {
+        const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+        const args = mode === 'save'
+          ? ['-e', `set r to (choose file name with prompt "${prompt}" default name "${base}")`,
+             '-e', 'set p to POSIX path of r',
+             '-e', 'if p does not end with ".txt" then set p to p & ".txt"',
+             '-e', 'return p']
+          : ['-e', `set r to (choose file of type {"public.plain-text", "txt"} with prompt "${prompt}")`,
+             '-e', 'return POSIX path of r'];
+        proc = spawn('osascript', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      }
+    } catch (_) {
+      proc = null;
+    }
+
+    if (!proc) {
+      const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+      resolve(showTextInput(prompt, base));
+      return;
+    }
+
+    let out = '';
+    proc.stdout.on('data', d => { out += d.toString(); });
+    proc.on('close', () => resolve(out.trim() || null));
+    proc.on('error', () => {
+      const prompt = mode === 'save' ? 'Save cards to file:' : 'Load cards from file:';
+      resolve(showTextInput(prompt, base));
+    });
+  });
+}
+
+// ── main screen (homepage) ────────────────────────────────────────────────
+
+function showMainScreen() {
+  return new Promise(resolve => {
+    sectionClear();
+    logBox.hide();
+
+    const artPath  = path.join(__dirname, '..', 'art', 'ascii', 'app', 'TCG_color.txt');
+    const rawArt   = fs.readFileSync(artPath, 'utf8');
+    const parsed   = parseArtColors(rawArt);
+
+    // Keep only lines that contain at least one non-space character
+    const artLines = parsed.filter(line => line.some(c => c.ch !== ' '));
+    const artH     = artLines.length;
+    const artW     = artLines.reduce((mx, l) => Math.max(mx, l.length), 1);
+
+    function toTagLine(line) {
+      let s = '';
+      for (const { ch, r, g, b } of line) {
+        if (ch === ' ') { s += ' '; continue; }
+        const rh  = (r !== null ? r : 200).toString(16).padStart(2, '0');
+        const gh  = (g !== null ? g : 200).toString(16).padStart(2, '0');
+        const bh  = (b !== null ? b : 200).toString(16).padStart(2, '0');
+        const esc = ch === '{' ? '\\{' : ch === '}' ? '\\}' : ch;
+        s += `{#${rh}${gh}${bh}-fg}${esc}{/}`;
+      }
+      return s;
+    }
+
+    const tagLines = artLines.map(toTagLine);
+
+    const screenH = Math.max(10, (screen.rows || screen.height || 50) - 2);
+    const screenW = Math.max(20, (screen.cols || screen.width || 160) - 2);
+
+    // Icon box: art + border (2) + 2 chars h-padding
+    const boxW = Math.min(artW + 4, screenW - 4);
+    const boxH = artH + 2;
+
+    // Vertical layout: boxH + 1 gap + 1 label + 2 gap + 1 exit
+    const totalH  = boxH + 5;
+    const topOff  = Math.max(1, Math.floor((screenH - totalH) / 2));
+    const leftOff = Math.max(1, Math.floor((screenW - boxW) / 2));
+
+    let focused = 0; // 0 = launch icon, 1 = exit
+    const km    = makeKeyManager();
+
+    function done(value) {
+      km.cleanup();
+      try { iconBox.destroy();    } catch (_) {}
+      try { labelWidget.destroy(); } catch (_) {}
+      try { exitWidget.destroy(); } catch (_) {}
+      activeWidget = null;
+      logBox.show();
+      screen.render();
+      resolve(value);
+    }
+
+    // Icon box
+    const iconBox = blessed.box({
+      parent: outerBox,
+      top:    topOff,
+      left:   leftOff,
+      width:  boxW,
+      height: boxH,
+      border: { type: 'line', fg: PRIMARY },
+      style:  { border: { fg: PRIMARY }, bg: '#000000' },
+      tags:   true,
+      mouse:  true,
+      keys:   true,
+    });
+
+    // Center art horizontally inside box (inside border = boxW - 2)
+    const innerW  = boxW - 2;
+    const hPad    = Math.max(0, Math.floor((innerW - artW) / 2));
+    const hPadStr = ' '.repeat(hPad);
+    iconBox.setContent(tagLines.map(l => hPadStr + l).join('\n'));
+
+    // Label
+    const labelStr    = 'Optimize by TCG';
+    const labelWidget = blessed.text({
+      parent:  outerBox,
+      top:     topOff + boxH + 1,
+      left:    leftOff,
+      width:   boxW,
+      height:  1,
+      tags:    true,
+    });
+    const lPad = Math.max(0, Math.floor((boxW - labelStr.length) / 2));
+    labelWidget.setContent(`{bold}{${PRIMARY}-fg}${' '.repeat(lPad)}${escape(labelStr)}{/}`);
+
+    // Exit button
+    const exitStr    = '[ Exit ]';
+    const exitLeft   = leftOff + Math.max(0, Math.floor((boxW - exitStr.length) / 2));
+    const exitWidget = blessed.box({
+      parent: outerBox,
+      top:    topOff + boxH + 3,
+      left:   exitLeft,
+      width:  exitStr.length + 1,
+      height: 1,
+      tags:   true,
+      mouse:  true,
+    });
+
+    function render() {
+      if (focused === 0) {
+        iconBox.style.border.fg = PRIMARY;
+        exitWidget.setContent(`{#555555-fg}${escape(exitStr)}{/}`);
+      } else {
+        iconBox.style.border.fg = '#333333';
+        exitWidget.setContent(`{#ffffff-bg}{#000000-fg}${escape(exitStr)}{/}`);
+      }
+      screen.render();
+    }
+
+    km.add(['up', 'down', 'tab', 'S-tab'], () => { focused = 1 - focused; render(); });
+    km.add(['enter', 'return'],            () => done(focused === 0 ? 'launch' : 'exit'));
+
+    iconBox.on('click',    () => done('launch'));
+    exitWidget.on('click', () => done('exit'));
+
+    iconBox.focus();
+    activeWidget = iconBox;
+    render();
   });
 }
 
@@ -686,13 +1094,17 @@ module.exports = {
   log, header, muted,
   sectionClear,
   runSplash,
+  showMainScreen,
+  showWelcome,
   showGridSelect,
   showMultiSelect,
   showAutocomplete,
   showConfirm,
+  showTextInput,
+  showFilePicker,
   showProgress,
   showCartProgress,
-  showComparison,
+  showCartComparison,
   showCartResult,
   waitForKey,
   shutdown,

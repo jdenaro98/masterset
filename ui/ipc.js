@@ -50,9 +50,16 @@ function spawnBackend() {
     }
   });
 
+  let stderrBuf = '';
   pyProc.stderr.on('data', d => {
-    // Backend logs go to our stderr (visible in the launching terminal only)
-    process.stderr.write(d);
+    stderrBuf += d.toString();
+    const lines = stderrBuf.split('\n');
+    stderrBuf = lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const handlers = listeners.get('backend_log') || [];
+      handlers.forEach(h => h({ type: 'backend_log', text: line }));
+    }
   });
 
   pyProc.on('exit', code => {
