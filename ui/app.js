@@ -2,6 +2,7 @@
 
 const blessed      = require('blessed');
 const { spawn }    = require('child_process');
+const fs           = require('fs');
 const path         = require('path');
 const { spawnBackend, call, on: onEvent } = require('./ipc');
 
@@ -122,40 +123,41 @@ function sectionClear() {
   screen.render();
 }
 
+// ── ANSI art parser ────────────────────────────────────────────────────────
+
+function parseArtColors(content) {
+  const result = [];
+  for (const rawLine of content.split('\n')) {
+    const chars = [];
+    let i = 0, curR = null, curG = null, curB = null;
+    while (i < rawLine.length) {
+      if (rawLine[i] === '\x1b' && rawLine[i + 1] === '[') {
+        let j = i + 2;
+        while (j < rawLine.length && rawLine[j] !== 'm') j++;
+        const params = rawLine.slice(i + 2, j).split(';').map(Number);
+        if (params[0] === 0 || params.length === 0) {
+          curR = null; curG = null; curB = null;
+        } else if (params[0] === 38 && params[1] === 2 && params.length >= 5) {
+          curR = params[2]; curG = params[3]; curB = params[4];
+        }
+        i = j + 1;
+      } else {
+        chars.push({ ch: rawLine[i], r: curR, g: curG, b: curB });
+        i++;
+      }
+    }
+    result.push(chars);
+  }
+  return result;
+}
+
 // ── splash ─────────────────────────────────────────────────────────────────
 
 function runSplash(artContent, primary) {
   return new Promise(resolve => {
     logBox.hide();
 
-    // Parse ANSI true-color sequences into per-character {ch, r, g, b} data
-    function parseArt(content) {
-      const result = [];
-      for (const rawLine of content.split('\n')) {
-        const chars = [];
-        let i = 0, curR = null, curG = null, curB = null;
-        while (i < rawLine.length) {
-          if (rawLine[i] === '\x1b' && rawLine[i + 1] === '[') {
-            let j = i + 2;
-            while (j < rawLine.length && rawLine[j] !== 'm') j++;
-            const params = rawLine.slice(i + 2, j).split(';').map(Number);
-            if (params[0] === 0 || params.length === 0) {
-              curR = null; curG = null; curB = null;
-            } else if (params[0] === 38 && params[1] === 2 && params.length >= 5) {
-              curR = params[2]; curG = params[3]; curB = params[4];
-            }
-            i = j + 1;
-          } else {
-            chars.push({ ch: rawLine[i], r: curR, g: curG, b: curB });
-            i++;
-          }
-        }
-        result.push(chars);
-      }
-      return result;
-    }
-
-    const parsedLines = parseArt(artContent);
+    const parsedLines = parseArtColors(artContent);
     const artH        = parsedLines.length;
     const maxArtWidth = Math.max(1, ...parsedLines.map(l => l.length));
     const boxW        = Math.max(1, (screen.cols || screen.width || 120) - 2);
@@ -953,6 +955,132 @@ function showFilePicker(mode, defaultFilePath) {
   });
 }
 
+// ── main screen (homepage) ────────────────────────────────────────────────
+
+function showMainScreen() {
+  return new Promise(resolve => {
+    sectionClear();
+    logBox.hide();
+
+    const artPath  = path.join(__dirname, '..', 'art', 'ascii', 'app', 'TCG_color.txt');
+    const rawArt   = fs.readFileSync(artPath, 'utf8');
+    const parsed   = parseArtColors(rawArt);
+
+    // Keep only lines that contain at least one non-space character
+    const artLines = parsed.filter(line => line.some(c => c.ch !== ' '));
+    const artH     = artLines.length;
+    const artW     = artLines.reduce((mx, l) => Math.max(mx, l.length), 1);
+
+    function toTagLine(line) {
+      let s = '';
+      for (const { ch, r, g, b } of line) {
+        if (ch === ' ') { s += ' '; continue; }
+        const rh  = (r !== null ? r : 200).toString(16).padStart(2, '0');
+        const gh  = (g !== null ? g : 200).toString(16).padStart(2, '0');
+        const bh  = (b !== null ? b : 200).toString(16).padStart(2, '0');
+        const esc = ch === '{' ? '\\{' : ch === '}' ? '\\}' : ch;
+        s += `{#${rh}${gh}${bh}-fg}${esc}{/}`;
+      }
+      return s;
+    }
+
+    const tagLines = artLines.map(toTagLine);
+
+    const screenH = Math.max(10, (screen.rows || screen.height || 50) - 2);
+    const screenW = Math.max(20, (screen.cols || screen.width || 160) - 2);
+
+    // Icon box: art + border (2) + 2 chars h-padding
+    const boxW = Math.min(artW + 4, screenW - 4);
+    const boxH = artH + 2;
+
+    // Vertical layout: boxH + 1 gap + 1 label + 2 gap + 1 exit
+    const totalH  = boxH + 5;
+    const topOff  = Math.max(1, Math.floor((screenH - totalH) / 2));
+    const leftOff = Math.max(1, Math.floor((screenW - boxW) / 2));
+
+    let focused = 0; // 0 = launch icon, 1 = exit
+    const km    = makeKeyManager();
+
+    function done(value) {
+      km.cleanup();
+      try { iconBox.destroy();    } catch (_) {}
+      try { labelWidget.destroy(); } catch (_) {}
+      try { exitWidget.destroy(); } catch (_) {}
+      activeWidget = null;
+      logBox.show();
+      screen.render();
+      resolve(value);
+    }
+
+    // Icon box
+    const iconBox = blessed.box({
+      parent: outerBox,
+      top:    topOff,
+      left:   leftOff,
+      width:  boxW,
+      height: boxH,
+      border: { type: 'line', fg: PRIMARY },
+      style:  { border: { fg: PRIMARY }, bg: '#000000' },
+      tags:   true,
+      mouse:  true,
+      keys:   true,
+    });
+
+    // Center art horizontally inside box (inside border = boxW - 2)
+    const innerW  = boxW - 2;
+    const hPad    = Math.max(0, Math.floor((innerW - artW) / 2));
+    const hPadStr = ' '.repeat(hPad);
+    iconBox.setContent(tagLines.map(l => hPadStr + l).join('\n'));
+
+    // Label
+    const labelStr    = 'Optimize by TCG';
+    const labelWidget = blessed.text({
+      parent:  outerBox,
+      top:     topOff + boxH + 1,
+      left:    leftOff,
+      width:   boxW,
+      height:  1,
+      tags:    true,
+    });
+    const lPad = Math.max(0, Math.floor((boxW - labelStr.length) / 2));
+    labelWidget.setContent(`{bold}{${PRIMARY}-fg}${' '.repeat(lPad)}${escape(labelStr)}{/}`);
+
+    // Exit button
+    const exitStr    = '[ Exit ]';
+    const exitLeft   = leftOff + Math.max(0, Math.floor((boxW - exitStr.length) / 2));
+    const exitWidget = blessed.box({
+      parent: outerBox,
+      top:    topOff + boxH + 3,
+      left:   exitLeft,
+      width:  exitStr.length + 1,
+      height: 1,
+      tags:   true,
+      mouse:  true,
+    });
+
+    function render() {
+      if (focused === 0) {
+        iconBox.style.border.fg = PRIMARY;
+        exitWidget.setContent(`{#555555-fg}${escape(exitStr)}{/}`);
+      } else {
+        iconBox.style.border.fg = '#333333';
+        exitWidget.setContent(`{#ffffff-bg}{#000000-fg}${escape(exitStr)}{/}`);
+      }
+      screen.render();
+    }
+
+    km.add(['up', 'down', 'tab', 'S-tab'], () => { focused = 1 - focused; render(); });
+    km.add(['enter', 'return'],            () => done(focused === 0 ? 'launch' : 'exit'));
+
+    iconBox.on('click',    () => done('launch'));
+    exitWidget.on('click', () => done('exit'));
+
+    iconBox.focus();
+    activeWidget = iconBox;
+    render();
+  });
+}
+
 // ── shutdown ───────────────────────────────────────────────────────────────
 
 function shutdown() {
@@ -966,6 +1094,7 @@ module.exports = {
   log, header, muted,
   sectionClear,
   runSplash,
+  showMainScreen,
   showWelcome,
   showGridSelect,
   showMultiSelect,

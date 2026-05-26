@@ -4,7 +4,7 @@ from PIL import Image
 
 
 # Maps brightness 0–255 to ASCII density (index 0=darkest, -1=lightest)
-_ASCII_CHARS = "@#%S?+;:,. "
+_ASCII_CHARS = "@#%S?+;:,."
 # Terminal chars are ~2x taller than wide; halving rows preserves visual aspect ratio
 _CHAR_ASPECT = 0.5
 _TARGET_WIDTH = 80
@@ -72,11 +72,11 @@ def image_gen(image_path: str) -> tuple[str, str]:
     os.makedirs("art/ascii", exist_ok=True)
     base_name = os.path.splitext(os.path.basename(image_path))[0]
 
-    plain_path = os.path.join("art/ascii/pokemon", f"{base_name}.txt")
+    plain_path = os.path.join("art/ascii/app", f"{base_name}.txt")
     with open(plain_path, "w") as f:
         f.write("\n".join(plain_lines))
 
-    color_path = os.path.join("art/ascii/pokemon", f"{base_name}_color.txt")
+    color_path = os.path.join("art/ascii/app", f"{base_name}_color.txt")
     with open(color_path, "w") as f:
         f.write("\n".join(color_lines))
 

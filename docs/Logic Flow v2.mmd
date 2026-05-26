@@ -1,0 +1,52 @@
+---
+config:
+  theme: neutral
+  layout: dagre
+---
+flowchart TB
+    n1["START: Load UI"] -- splashsceen --> n31["Main App Homepage"]
+    n3["Choose Set"] --> n5["Exclusive"] & n6["Inclusive"] & n8["All Cards"]
+    n9["Choose Game (2nd+ time)"] --> n10["Restart"] & n11["Done"] & n3
+    n2["Choose Game (1st time)"] --> n3
+    n10 -- Full restart of the app, clearing any previous card/set/game selections --> n2
+    n5 --> n12["Choose Cards"]
+    n6 --> n12
+    n12 --> n13["Save"] & n14["Load"] & n25["Exit"] & n26["Restart"]
+    n12 -- Pressed enter on 'selected' cards --> n15["Scrape another set?"]
+    n15 --> n16["Yes"] & n17["No"]
+    n16 --> n9
+    n18["Add cards to cart?"] --> n19["Yes"] & n20["No"]
+    n17 --> n18
+    n19 --> n21["cart_create.py function"]
+    n13 --> n23["Save .txt file"]
+    n23 --> n12
+    n14 --> n24["Wipe previous card selections (if any) and load directly from txt file, cross checking with allowed card names in set"]
+    n24 --> n12
+    n8 --> n15
+    n26 --> n27["is 2nd + game selection?"]
+    n27 --> n28["Yes"] & n29["NO"]
+    n29 --> n2
+    n28 --> n9
+    n11 --> n18
+    n31 -- "<span style=padding-left: 8px; padding-right: 8px; text-align: center; justify-content: center;>User clicks on 'TCG' sprite</span>" --> n32["APP: Optimize by TCG"]
+    n31 -- User choses full 'Exit' --> n33["Exit Shell and Terminal"]
+    n32 -- <br> --> n2
+    n21 --> n31
+    n25 --> n31
+    n20 --> n31
+
+    n1@{ shape: rounded}
+    n3@{ shape: rounded}
+    n5@{ shape: rounded}
+    n6@{ shape: rounded}
+    n8@{ shape: rounded}
+    n9@{ shape: rounded}
+    n10@{ shape: rounded}
+    n11@{ shape: rounded}
+    n2@{ shape: rounded}
+    n12@{ shape: rounded}
+    n15@{ shape: diam}
+    n18@{ shape: diam}
+    n21@{ shape: rounded}
+    n24@{ shape: extract}
+    n27@{ shape: decision}

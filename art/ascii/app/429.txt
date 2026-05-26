@@ -1,0 +1,40 @@
+                                     ;+                                         
+                                    ;;+?                                        
+                                   ;;;++                                        
+                                  ;;;++?                                        
+                                 ;;;;+++                                        
+                                ;;;;;+++?                                       
+                               ++;;++?+?+?                                      
+                              ??S??S?S?SS?                                      
+                      +;     ????????SSSSSS         +                           
+                      ;;+++ ??S?????SSSSSSS       ++?                           
+                      +?+????S????SSSSSSSSS%   +++???    ++?                    
+                     ??SSS??SSSSSSSSSSSSSSSSS????SS??   ++??  ++                
+                +?+??????????????SSSSSSSSSSSSSSSS%S????+???????                 
+               ?+????????????????????????????SSSS?SSSSSSSSSS?                   
+               SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS%%SS                  
+                           %%SS%%%%%%%%%%%%%%%%%%%%%%%%%                        
+                             %%%%%%%%%%%S%                                      
+                               SSSSSSSSSS%                                      
+                                SSSSSSSS%                                       
+                                  SS%SS%%S                                      
+                                  ?SSSSSSSS????+++                              
+                             ??????S??SS?S%%SSSSSS?+                            
+                         +++???+?????SSS??SSS%SSSSSS+?                          
+                        ;;??????SSSS???SSSSSSSS%SSSSSSS                         
+                       ?;?S?S??SSSSSS?SSSSSSSSSSSSSSSSSS???                     
+                       ?++SS??SSSSSSSSSSSSSSSSSSSSSSSSSSS?++?                   
+                        +????SSSSSSSSSSSSSSSSSSSSSSSSSSSS?+?S                   
+                        +??SSSSSSSSSSSSSSSSSSSSSSSSSSSSS???                     
+                       ++??SSS?SSSSSSSSSSSSSSSSSSSSSSSS??S                      
+                       ?;+?SS?SSSSSSSSSSSS?SSSSSSSSSSS?+?                       
+                         +?S??SSSS%?S SS S?SSSSSSS??????                        
+                         S???SS+++?    S S??SSSSS????                           
+                        ????SSS?++?      S?S?SSSSS                              
+                       ????+?S           S?+?SSSSSS                             
+                         ?++++?         ?+++?SSSSS                              
+                          ;+++          +;+++S                                  
+                         ;;++            ++++S                                  
+                         +;+              ++?                                   
+                        +++               +++                                   
+                                                                                

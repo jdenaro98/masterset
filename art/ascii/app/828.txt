@@ -1,0 +1,40 @@
+                                                                                
+     %             %S                                                           
+     %%           %SS                                                           
+     S%%         %%SS                                                           
+     %%%        %%SSS                                                           
+     %%%%      %%%SSS                                                           
+     %%%%S+++?%%%SSSS                                                           
+S     %S?++???%%SSSS                                                            
+%%   +?+????SSSSSSSS  %%                                                        
+S%%%S+S%??S%S+?%SS%%%%%                                                         
+%%%%%S?#%#%S?S%#%%%%##                                                          
+ %%##S?+,+%S?S########                                                          
+  S%S?+:+?S%%%%####%%                                                           
+     ?SS%#%%%%%%%SS                                                             
+       SSSSSS%%%%SS   SSSSSSS%SS?                                               
+       ;:,:::;+SSSSS?SS%%%%%%%%%%SS??                                           
+       ;,,,,,,,;SSSS?%%%%%%%%%#%%%#%S??                                         
+      ;:.,,,,,:,+SSSS%SS%%%%%%%%####%%??                                        
+     ;:,,,,,,,:::?SSSSSSSSSSSSSSS%###%SS??                                      
+    ;:,,,,,,,,,::;SSSSSSS??SSSSSSS%##%S%SS??                                    
+    ;,,,,,,,:,,:::?SSSSSSS?SSSSSSSS##%S%SSS???                    SS%           
+    ,.,,,,,,::,:::;SSSSSSSSSS%SSSSS%##S%%SSSS??+++             SSS%%%%%%%%%     
+    .,,,,,,,,;:::;;SSSSSSSSS%SSSSSSS%%%%%%SSSSS???+++++++++++++?S%%%%%%%%%%     
+    ,,,,,,,::;;;;;;S%SSSSS%SSSSSSSSSSS%%%%%SSSSSSSS??????????++?SS%%%%%%%%%     
+     ,,,::::;;+;;;+%%SSSSS% SSSSSSSSS%%%%%%%%SSSSSSSSSS????????????SS%%%%#%%%%  
+      ,,:;;;;;+++;S%%%%%S%S ?SSSSSSSS%%%%%%%%%%SSSSSSSSSSSSSSSSS????S%%%######% 
+       :::;;++++;+%%%%%S%%SS SSSSSSSSS%%%%%%%%%%%SSSSSSSSSSSSSSSSSS%#########   
+        ?+;;++++;?%%%%%S%%%%% SSSS%SSSSS%%%%%%%%%%%%SSSSSSSSSSSSSSS%%######%    
+         SSSSS    S%%%%SS%%S     SS%%SSSSS%%%%%%%%%%%%%SSSSSSSSSSSSSSS%#####%   
+          SS%%    SSSSS??SS%      SSSSS  SSSS%%%%%%%%%%%%%%%%%SSSSSS%%#####     
+          S%%%%  S%SSS  SSSS       ?SS?     SSSSSS%%%%%%%%%%%SSSS%%####         
+          %#### %###%% S%%%        SSS?        SSSSSSSSSSSSSSSSSS%              
+           #### %##### %%##        %#%                  SSSS                    
+           %### %%##   %%##        %%#%                                         
+           %%## #%%#  %%%##        %%%%                                         
+           %%#%%%%%S%#%####       %%%%#                                         
+           %%%%%%#%%######      %#%%%%#                                         
+         %%%%%%%%%%            %######                                          
+        %##%%%#%%##                                                             
+           #######                                                              
