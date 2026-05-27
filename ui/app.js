@@ -1072,12 +1072,376 @@ function showMainScreen() {
     km.add(['up', 'down', 'tab', 'S-tab'], () => { focused = 1 - focused; render(); });
     km.add(['enter', 'return'],            () => done(focused === 0 ? 'launch' : 'exit'));
 
+    iconBox.on('mouseover',    () => { focused = 0; render(); });
+    exitWidget.on('mouseover', () => { focused = 1; render(); });
+
     iconBox.on('click',    () => done('launch'));
     exitWidget.on('click', () => done('exit'));
 
     iconBox.focus();
     activeWidget = iconBox;
     render();
+  });
+}
+
+// ── cart summary helpers (also used by main.js) ───────────────────────────
+
+function calcShipping(cart) {
+  const sellers = {};
+  for (const item of cart) {
+    const sid = item.seller_id || item.seller;
+    if (!sellers[sid]) sellers[sid] = { price: 0, ship: 0, deal: false };
+    sellers[sid].price += item.price || 0;
+    if ((item.shipping || 0) > sellers[sid].ship) sellers[sid].ship = item.shipping;
+    if (item.shipping_deal) sellers[sid].deal = true;
+  }
+  let total = 0;
+  for (const s of Object.values(sellers)) {
+    if (!(s.deal && s.price >= 5)) total += s.ship;
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function buildSummary(cart) {
+  const sellers = new Set(cart.map(i => i.seller).filter(Boolean));
+  const rawCost = cart.reduce((s, i) => s + (i.price || 0), 0);
+  const shipping = calcShipping(cart);
+  return { sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
+}
+
+// ── dynamic optimizer screen ──────────────────────────────────────────────
+//
+// Three selectable cart summaries across the top (First Listing, Default
+// Optimized, Your Cart), with Condition and Seller Qualification filter
+// panels below that live-update Column 3 on every toggle.
+//
+// Returns Promise<{ action: 'confirm'|'restart'|'home', cart: [...] }>
+
+function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilters = {}) {
+  return new Promise(resolve => {
+    sectionClear();
+    logBox.hide();
+
+    const km = makeKeyManager();
+
+    // ── state ──────────────────────────────────────────────────────────
+    let zone         = 0;   // 0 = top (carts)   1 = bottom (filters)
+    let selectedCart = 1;   // 0 = first   1 = default   2 = user
+    let filterCol    = 0;   // 0 = conditions   1 = sellerQuals
+    const filterRows = [0, 0];
+
+    const CONDITIONS = filterOptions.conditions;
+    const QUALS      = filterOptions.sellerQuals;
+    const QUAL_LABELS = {
+      Verified: 'Verified Seller',
+      Direct:   'Direct',
+      WPN:      'WPN',
+    };
+
+    // Default checked state mirrors Column 2's optimization criteria
+    const defaultConds = defaultFilters.conditions || ['Near Mint', 'Lightly Played'];
+    const defaultQuals = defaultFilters.quals || ['Verified'];
+    const condChecked = new Set(defaultConds.filter(c => CONDITIONS.includes(c)));
+    const qualChecked = new Set(defaultQuals.filter(q => QUALS.includes(q)));
+
+    let userCart         = defaultCart;
+    let currentOverrides = [];
+    let isCalc           = false;
+    let debounceId       = null;
+    let spinnerTimer     = null;
+    let spinnerFrame     = 0;
+    const SPINNER     = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+    const summaries = [
+      buildSummary(firstCart),
+      buildSummary(defaultCart),
+      buildSummary(userCart),
+    ];
+
+    // ── layout ─────────────────────────────────────────────────────────
+    const CART_TOP   = 1;
+    const CART_H     = 7;
+    const FILTER_TOP = CART_TOP + CART_H + 2;
+    const FILTER_H   = 10;
+    const NOTICE_TOP = FILTER_TOP + FILTER_H;
+
+    // ── hint bar ────────────────────────────────────────────────────────
+    const hintWidget = blessed.text({
+      parent:  outerBox,
+      top: 0, left: 1, right: 1, height: 1,
+      content: '',
+      style:   { bg: '#000000' },
+      tags:    true,
+    });
+    activeHints.push(hintWidget);
+
+    // ── 3 cart boxes ───────────────────────────────────────────────────
+    const CART_TITLES = ['FIRST LISTING', 'DEFAULT OPTIMIZED', 'YOUR CART'];
+    const cartBoxes = [0, 1, 2].map(i => {
+      const box = blessed.box({
+        parent: outerBox,
+        top:    CART_TOP,
+        left:   `${Math.round(i * 33.33)}%`,
+        width:  i < 2 ? '33%' : undefined,
+        right:  i === 2 ? 1 : undefined,
+        height: CART_H,
+        border: { type: 'line' },
+        style:  { border: { fg: '#333333' }, bg: '#000000' },
+        tags:   true,
+        keys:   true,
+      });
+      return box;
+    });
+
+    // ── 2 filter boxes ─────────────────────────────────────────────────
+    const FILTER_LABELS = ['Filter: Condition', 'Filter: Seller Qualification'];
+    const filterBoxes = [0, 1].map(i => {
+      const box = blessed.box({
+        parent: outerBox,
+        top:    FILTER_TOP,
+        left:   i === 0 ? 0     : '50%',
+        width:  i === 0 ? '50%' : undefined,
+        right:  i === 1 ? 1     : undefined,
+        height: FILTER_H,
+        border: { type: 'line' },
+        label:  ` ${FILTER_LABELS[i]} `,
+        style:  {
+          border: { fg: '#444444' },
+          bg: '#000000',
+          label: { fg: SECONDARY },
+        },
+        tags:       true,
+        scrollable: true,
+        alwaysScroll: true,
+        keys:       true,
+      });
+      return box;
+    });
+
+    // ── notice box ─────────────────────────────────────────────────────
+    const noticeBox = blessed.box({
+      parent: outerBox,
+      top:    NOTICE_TOP,
+      left:   0,
+      right:  1,
+      bottom: 1,
+      border: { type: 'line' },
+      label:  ' Notices ',
+      style:  { border: { fg: '#444444' }, bg: '#000000', label: { fg: SECONDARY } },
+      tags:   true,
+      scrollable:   true,
+      alwaysScroll: true,
+    });
+
+    // ── cleanup ────────────────────────────────────────────────────────
+    function cleanupAndResolve(value) {
+      km.cleanup();
+      if (spinnerTimer) clearInterval(spinnerTimer);
+      if (debounceId)   clearTimeout(debounceId);
+      for (const b of [...cartBoxes, ...filterBoxes, noticeBox]) {
+        try { b.destroy(); } catch (_) {}
+      }
+      activeWidget = null;
+      logBox.show();
+      screen.render();
+      resolve(value);
+    }
+
+    // ── spinner ────────────────────────────────────────────────────────
+    function startSpinner() {
+      if (spinnerTimer) clearInterval(spinnerTimer);
+      spinnerTimer = setInterval(() => {
+        spinnerFrame = (spinnerFrame + 1) % SPINNER.length;
+        renderCartBox(2);
+      }, 80);
+    }
+
+    function stopSpinner() {
+      if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+    }
+
+    // ── debounced re-optimization ──────────────────────────────────────
+    function scheduleOptimize() {
+      if (debounceId) clearTimeout(debounceId);
+      isCalc = true;
+      startSpinner();
+      debounceId = setTimeout(async () => {
+        try {
+          const result = await call('optimize_filtered', {
+            conditions:  [...condChecked],
+            sellerQuals: [...qualChecked],
+          });
+          userCart         = result.cart;
+          currentOverrides = result.overrides || [];
+          summaries[2]     = buildSummary(userCart);
+        } catch (_) {
+          // keep previous result on error
+        } finally {
+          isCalc = false;
+          stopSpinner();
+          renderCartBox(2);
+          renderNotice();
+        }
+      }, 300);
+    }
+
+    // ── render: single cart box ────────────────────────────────────────
+    function renderCartBox(i) {
+      const box        = cartBoxes[i];
+      const isSelected = selectedCart === i;
+      const isTopZone  = zone === 0;
+
+      box.style.border.fg = (isTopZone && isSelected) ? PRIMARY : '#333333';
+
+      if (i === 2 && isCalc) {
+        const sp = SPINNER[spinnerFrame];
+        box.setContent(
+          `{bold}{${SECONDARY}-fg}${escape(CART_TITLES[i])}{/}\n\n` +
+          `{${PRIMARY}-fg}  ${sp} Recalculating…{/}`
+        );
+      } else {
+        const s     = summaries[i];
+        const color = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
+        box.setContent(
+          `{bold}{${color}-fg}${escape(CART_TITLES[i])}{/}\n` +
+          `{${color}-fg}` +
+          `  Sellers:  ${s.sellers}\n` +
+          `  Cards:    $${s.rawCost.toFixed(2)}\n` +
+          `  Shipping: $${s.shipping.toFixed(2)}\n` +
+          `  Total:    $${s.total.toFixed(2)}{/}`
+        );
+      }
+      screen.render();
+    }
+
+    // ── render: single filter box ──────────────────────────────────────
+    function renderFilterBox(col) {
+      const box      = filterBoxes[col];
+      const items    = col === 0 ? CONDITIONS : QUALS;
+      const checked  = col === 0 ? condChecked : qualChecked;
+      const cursor   = filterRows[col];
+      const isActive = zone === 1 && filterCol === col;
+
+      box.style.border.fg = isActive ? SECONDARY : '#444444';
+
+      const lines = items.map((item, idx) => {
+        const label     = col === 1 ? (QUAL_LABELS[item] || item) : item;
+        const isChecked = checked.has(item);
+        const isCursor  = isActive && idx === cursor;
+        const prefix    = isChecked ? '[x]' : '[ ]';
+        const text      = `${prefix} ${escape(label)}`;
+        if (isCursor)       return `{#ffffff-bg}{#000000-fg} ${text} {/}`;
+        if (isChecked)      return `{${PRIMARY}-fg} ${text}{/}`;
+        return `{${SECONDARY}-fg} ${text}{/}`;
+      });
+
+      box.setContent(lines.join('\n'));
+      screen.render();
+    }
+
+    // ── render: hint bar ───────────────────────────────────────────────
+    function renderHint() {
+      const hint = zone === 0
+        ? `{${PRIMARY}-fg}CARTS{/} {#888888-fg}←/→ navigate   ENTER confirm   TAB: go to filters   R restart   ESC home{/}`
+        : `{${SECONDARY}-fg}FILTERS{/} {#888888-fg}←/→ columns   ↑/↓ navigate   SPACE toggle   TAB: go to carts   R restart   ESC home{/}`;
+      hintWidget.setContent(`  ${hint}`);
+      screen.render();
+    }
+
+    // ── render: notice box ─────────────────────────────────────────────
+    function renderNotice() {
+      if (!currentOverrides.length) {
+        noticeBox.setContent('');
+        noticeBox.style.border.fg = '#444444';
+      } else {
+        noticeBox.style.border.fg = '#ff9955';
+        const lines = currentOverrides.map(o =>
+          `{#ffaa55-fg}⚠ ${escape(o.name)}{/}  {#888888-fg}(${escape(o.applied)}){/}`
+        );
+        noticeBox.setContent(lines.join('\n'));
+      }
+      screen.render();
+    }
+
+    function renderAll() {
+      for (let i = 0; i < 3; i++) renderCartBox(i);
+      for (let c = 0; c < 2; c++) renderFilterBox(c);
+      renderNotice();
+      renderHint();
+    }
+
+    // ── key bindings ───────────────────────────────────────────────────
+
+    km.add('tab', () => {
+      zone = 1 - zone;
+      if (zone === 1) {
+        filterBoxes[filterCol].focus();
+        activeWidget = filterBoxes[filterCol];
+      } else {
+        cartBoxes[selectedCart].focus();
+        activeWidget = cartBoxes[selectedCart];
+      }
+      renderAll();
+    });
+
+    km.add('left', () => {
+      if (zone === 0) {
+        if (selectedCart > 0) { selectedCart--; renderAll(); }
+      } else {
+        if (filterCol > 0) { filterCol--; renderAll(); filterBoxes[filterCol].focus(); }
+      }
+    });
+
+    km.add('right', () => {
+      if (zone === 0) {
+        if (selectedCart < 2) { selectedCart++; renderAll(); }
+      } else {
+        if (filterCol < 1) { filterCol++; renderAll(); filterBoxes[filterCol].focus(); }
+      }
+    });
+
+    km.add('up', () => {
+      if (zone === 1 && filterRows[filterCol] > 0) {
+        filterRows[filterCol]--;
+        renderFilterBox(filterCol);
+      }
+    });
+
+    km.add('down', () => {
+      if (zone === 1) {
+        const items = filterCol === 0 ? CONDITIONS : QUALS;
+        if (filterRows[filterCol] < items.length - 1) {
+          filterRows[filterCol]++;
+          renderFilterBox(filterCol);
+        }
+      }
+    });
+
+    km.add('space', () => {
+      if (zone !== 1) return;
+      const items   = filterCol === 0 ? CONDITIONS : QUALS;
+      const checked = filterCol === 0 ? condChecked : qualChecked;
+      const item    = items[filterRows[filterCol]];
+      if (!item) return;
+      if (checked.has(item)) checked.delete(item);
+      else                   checked.add(item);
+      renderFilterBox(filterCol);
+      scheduleOptimize();
+    });
+
+    km.add(['enter', 'return'], () => {
+      if (selectedCart === 2 && isCalc) return; // block Column 3 while calculating
+      const carts = [firstCart, defaultCart, userCart];
+      cleanupAndResolve({ action: 'confirm', cart: carts[selectedCart] });
+    });
+
+    km.add(['r', 'R'], () => cleanupAndResolve({ action: 'restart' }));
+    km.add('escape',    () => cleanupAndResolve({ action: 'home' }));
+
+    // ── initial focus & render ─────────────────────────────────────────
+    cartBoxes[selectedCart].focus();
+    activeWidget = cartBoxes[selectedCart];
+    renderAll();
   });
 }
 
@@ -1107,5 +1471,8 @@ module.exports = {
   showCartComparison,
   showCartResult,
   waitForKey,
+  buildSummary,
+  calcShipping,
+  showDynamicOptimizer,
   shutdown,
 };

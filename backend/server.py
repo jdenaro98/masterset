@@ -107,6 +107,10 @@ _HEADERS = {
     "Sec-Fetch-Site": "same-site",
 }
 
+# ── full listing cache (populated by handle_fetch_listings) ───────────────────
+
+_cached_card_data = {}
+
 # ── API handlers ──────────────────────────────────────────────────────────────
 
 
@@ -224,15 +228,15 @@ def handle_fetch_cards(params):
     return out
 
 
-def _fetch_one(product_id, max_listings):
+def _fetch_one(product_id):
+    """Fetch ALL listings for a product, paginating until exhausted."""
     url = f"https://mp-search-api.tcgplayer.com/v1/product/{product_id}/listings"
     hdrs = {**_HEADERS, "Content-Type": "application/json"}
-    all_listings, offset, size = [], 0, min(50, max_listings or 50)
+    all_listings, offset = [], 0
+    size = 50
     session = requests.Session()
     try:
         while True:
-            if max_listings and len(all_listings) >= max_listings:
-                break
             payload = {
                 "filters": {
                     "term": {"sellerStatus": "Live", "channelId": 0},
@@ -253,8 +257,7 @@ def _fetch_one(product_id, max_listings):
             listings = data["results"][0].get("results", [])
             if not listings:
                 break
-            cap = listings[:max_listings - len(all_listings)] if max_listings else listings
-            all_listings.extend(cap)
+            all_listings.extend(listings)
             if len(listings) < size:
                 break
             offset += size
@@ -269,13 +272,13 @@ _LANG_OTHERS = (
 )
 
 
-def _clean_listings(raw):
-    cleaned = []
+def _normalize_listings(raw):
+    """
+    Language-filter and normalize raw API listings.
+    Keeps all conditions and seller types — filtering happens later via _apply_filters.
+    """
+    normalized = []
     for item in raw:
-        if not (item.get("verifiedSeller") or item.get("goldSeller")):
-            continue
-        if item.get("condition") not in ("Near Mint", "Lightly Played"):
-            continue
         title = item.get("customData", {}).get("title", "")
         if title:
             lang = item.get("language", "English")
@@ -284,27 +287,60 @@ def _clean_listings(raw):
                 continue
         sd = item.get("sellerShippingPrice") == 0 and item.get("shippingPrice", 0) > 0
         with contextlib.suppress(Exception):
-            cleaned.append({
-                "price":         item.get("price"),
-                "shipping":      item.get("shippingPrice"),
-                "total":         (item.get("price") or 0) + (item.get("shippingPrice") or 0),
-                "shipping_deal": sd,
-                "seller":        item.get("sellerName"),
-                "verifiedSeller": item.get("verifiedSeller"),
-                "goldSeller":    item.get("goldSeller"),
-                "condition":     item.get("condition"),
-                "sku":           int(item.get("productConditionId") or 0),
-                "sellerKey":     item.get("sellerKey"),
-                "title":         title or "No Picture Linked",
+            progs = item.get("sellerPrograms") or []
+            normalized.append({
+                "price":          item.get("price"),
+                "shipping":       item.get("shippingPrice"),
+                "total":          (item.get("price") or 0) + (item.get("shippingPrice") or 0),
+                "shipping_deal":  sd,
+                "seller":         item.get("sellerName"),
+                "seller_id":      item.get("sellerId"),
+                "goldSeller":     item.get("goldSeller", False),
+                "directSeller":   bool(item.get("directSeller") or item.get("directListing") or "Direct" in progs),
+                "sellerPrograms": progs,
+                "condition":      item.get("condition"),
+                "sku":            int(item.get("productConditionId") or 0),
+                "sellerKey":      item.get("sellerKey"),
+                "title":          title or "No Picture Linked",
                 "custom_listing_key": item.get("customData", {}).get("linkId", "No Picture Linked"),
             })
-    return cleaned
+    return normalized
+
+
+# Maps the qualifier keys the frontend sends to listing field checks.
+# "Verified" on TCGPlayer's website = goldSeller:true in the API (verifiedSeller is unrelated).
+_QUAL_CHECKS = {
+    "Verified": lambda l: l.get("goldSeller", False),
+    "Direct":   lambda l: l.get("directSeller", False),
+    "WPN":      lambda l: "WizardsPlayNetwork" in (l.get("sellerPrograms") or []),
+}
+
+
+def _apply_filters(listings, conditions, seller_quals):
+    """
+    Conditions: OR (Near Mint OR Damaged → either is acceptable).
+    Seller quals: AND (Gold Star AND WPN → seller must hold both).
+    Across the two categories: AND.
+    Empty list for a category = no filter on that category (all listings pass).
+    """
+    cond_set = set(conditions) if conditions else None
+    active_quals = [q for q in (seller_quals or []) if q in _QUAL_CHECKS]
+
+    result = []
+    for listing in listings:
+        if cond_set and listing.get("condition") not in cond_set:
+            continue
+        if active_quals and not all(_QUAL_CHECKS[q](listing) for q in active_quals):
+            continue
+        result.append(listing)
+    return result
 
 
 def handle_fetch_listings(params):
-    """Fetch listings for all tasks, emitting progress events as each card finishes."""
+    """Fetch all listings for every task, emitting progress events as each card finishes."""
+    global _cached_card_data
+
     tasks = params["tasks"]
-    max_listings = params.get("maxListings", 50)
     max_workers = min(8, len(tasks))
 
     all_card_data = {}
@@ -313,7 +349,7 @@ def handle_fetch_listings(params):
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_map = {
-            ex.submit(_fetch_one, t["productId"], max_listings): t
+            ex.submit(_fetch_one, t["productId"]): t
             for t in tasks
         }
         for future in as_completed(future_map):
@@ -324,20 +360,116 @@ def handle_fetch_listings(params):
             except Exception as e:
                 _log(f"Error fetching {name}: {e}")
                 raw = []
-            cleaned = _clean_listings(raw)
+            normalized = _normalize_listings(raw)
             all_card_data[str(pid)] = {
-                "card_info": {"name": name, "total_active_listings": len(cleaned)},
-                "market_listings": cleaned,
+                "card_info": {"name": name, "total_active_listings": len(normalized)},
+                "market_listings": normalized,
             }
             done += 1
             _progress(done=done, total=total, card=name)
 
+    _cached_card_data = all_card_data
     return all_card_data
 
 
 def handle_optimize(params):
     all_card_data = params["allCardData"]
     return optimizer.optimize(all_card_data)
+
+
+def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
+    """
+    Apply filters to each card, falling back progressively when no listings match.
+    Fallback order: full → drop condition → drop sellerQual → all listings.
+    Returns (filtered_data, overrides) where overrides is a list of
+    {"name": str, "applied": str} for cards whose filter was relaxed.
+    """
+    filtered_data = {}
+    overrides     = []
+    has_cond  = bool(conditions)
+    has_qual  = bool(seller_quals)
+
+    for pid, card_data in card_data_map.items():
+        raw  = card_data["market_listings"]
+        name = card_data["card_info"]["name"]
+
+        # Tier 1: full filter
+        result = _apply_filters(raw, conditions, seller_quals)
+        if result or (not has_cond and not has_qual):
+            filtered_data[pid] = {**card_data, "market_listings": result if result else raw}
+            continue
+
+        # Tier 2: keep seller qual, drop condition
+        if has_cond and has_qual:
+            result = _apply_filters(raw, [], seller_quals)
+            if result:
+                filtered_data[pid] = {**card_data, "market_listings": result}
+                overrides.append({"name": name, "applied": "condition filter removed"})
+                continue
+
+        # Tier 3: keep condition, drop seller qual
+        if has_qual:
+            result = _apply_filters(raw, conditions, [])
+            if result:
+                filtered_data[pid] = {**card_data, "market_listings": result}
+                overrides.append({"name": name, "applied": "seller filter removed"})
+                continue
+
+        # Tier 4: no filter
+        filtered_data[pid] = {**card_data, "market_listings": raw}
+        overrides.append({"name": name, "applied": "all filters removed"})
+
+    return filtered_data, overrides
+
+
+def handle_optimize_filtered(params):
+    """Run optimizer against cached listings with dynamic filter criteria applied."""
+    conditions   = params.get("conditions") or []
+    seller_quals = params.get("sellerQuals") or []
+
+    filtered_data, overrides = _apply_filters_with_fallback(
+        _cached_card_data, conditions, seller_quals
+    )
+
+    if overrides:
+        preview = ", ".join(o["name"] for o in overrides[:5])
+        suffix  = f" + {len(overrides) - 5} more" if len(overrides) > 5 else ""
+        _log(f"filter relaxed for {len(overrides)} card(s): {preview}{suffix}")
+
+    return {"cart": optimizer.optimize(filtered_data), "overrides": overrides}
+
+
+def handle_get_filter_options(params):
+    """
+    Return the conditions and seller qualifications actually present in the cached data,
+    ordered canonically.
+    """
+    CONDITION_ORDER = ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"]
+    QUAL_ORDER      = ["Verified", "Direct", "WPN"]
+
+    conditions_seen = set()
+    quals_seen      = set()
+
+    for card_data in _cached_card_data.values():
+        for listing in card_data.get("market_listings", []):
+            cond = listing.get("condition")
+            if cond:
+                conditions_seen.add(cond)
+            if listing.get("goldSeller"):
+                quals_seen.add("Verified")
+            if listing.get("directSeller"):
+                quals_seen.add("Direct")
+            for prog in (listing.get("sellerPrograms") or []):
+                if prog == "WizardsPlayNetwork":
+                    quals_seen.add("WPN")
+
+    ordered_conditions = [c for c in CONDITION_ORDER if c in conditions_seen]
+    ordered_conditions += sorted(c for c in conditions_seen if c not in CONDITION_ORDER)
+
+    ordered_quals = [q for q in QUAL_ORDER if q in quals_seen]
+    ordered_quals += sorted(q for q in quals_seen if q not in QUAL_ORDER)
+
+    return {"conditions": ordered_conditions, "sellerQuals": ordered_quals}
 
 
 _active_pw = None
@@ -372,14 +504,16 @@ def handle_close_browser(params):
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
-    "get_theme":        handle_get_theme,
-    "fetch_categories": handle_fetch_categories,
-    "fetch_sets":       handle_fetch_sets,
-    "fetch_cards":      handle_fetch_cards,
-    "fetch_listings":   handle_fetch_listings,
-    "optimize":         handle_optimize,
-    "create_cart":      handle_create_cart,
-    "close_browser":    handle_close_browser,
+    "get_theme":           handle_get_theme,
+    "fetch_categories":    handle_fetch_categories,
+    "fetch_sets":          handle_fetch_sets,
+    "fetch_cards":         handle_fetch_cards,
+    "fetch_listings":      handle_fetch_listings,
+    "optimize":            handle_optimize,
+    "optimize_filtered":   handle_optimize_filtered,
+    "get_filter_options":  handle_get_filter_options,
+    "create_cart":         handle_create_cart,
+    "close_browser":       handle_close_browser,
 }
 
 # ── main loop ─────────────────────────────────────────────────────────────────
