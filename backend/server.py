@@ -20,6 +20,7 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 import traceback
 from collections import Counter
@@ -54,9 +55,13 @@ import optimizer
 # ── stdout helpers ────────────────────────────────────────────────────────────
 
 
+_stdout_lock = threading.Lock()
+
+
 def _send(obj):
-    sys.stdout.write(json.dumps(obj) + "\n")
-    sys.stdout.flush()
+    with _stdout_lock:
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
 
 
 def _ok(req_id, result):
@@ -114,8 +119,23 @@ _cached_card_data = {}
 # ── API handlers ──────────────────────────────────────────────────────────────
 
 
+def _load_pokemon_names():
+    names_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "art", "ascii", "pokemon", "pokemon_names.json",
+    )
+    with open(names_path, encoding="utf-8") as f:
+        return json.load(f)
+
+_pokemon_names = None
+
+
 def handle_get_theme(params):
     """Pick a random pokemon art file, extract dominant colors, return art + RGB theme."""
+    global _pokemon_names
+    if _pokemon_names is None:
+        _pokemon_names = _load_pokemon_names()
+
     art_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "art", "ascii", "pokemon",
@@ -125,6 +145,9 @@ def handle_get_theme(params):
     path = os.path.join(art_dir, chosen)
     with open(path) as f:
         content = f.read()
+
+    num = int(chosen.replace("_color.txt", ""))
+    pokemon_name = _pokemon_names.get(str(num), f"#{num}")
 
     raw = re.findall(r"\x1b\[38;2;(\d+);(\d+);(\d+)m", content)
     colors = [(int(r), int(g), int(b)) for r, g, b in raw]
@@ -150,10 +173,11 @@ def handle_get_theme(params):
 
     primary, secondary, accent = _boost(dom[0]), _boost(dom[1]), _boost(dom[2])
     return {
-        "artContent": content,
-        "primary":    list(primary),
-        "secondary":  list(secondary),
-        "accent":     list(accent),
+        "artContent":   content,
+        "pokemonName":  pokemon_name,
+        "primary":      list(primary),
+        "secondary":    list(secondary),
+        "accent":       list(accent),
     }
 
 
@@ -228,8 +252,17 @@ def handle_fetch_cards(params):
     return out
 
 
-def _fetch_one(product_id):
-    """Fetch ALL listings for a product, paginating until exhausted."""
+_MAX_RETRIES = 4
+_RETRY_BACKOFF = [2, 5, 10, 20]  # seconds between attempts
+
+
+def _fetch_one(product_id, page_cb=None):
+    """Fetch ALL listings for a product, paginating until exhausted.
+
+    page_cb(count) is called after each full page (count = total fetched so far).
+    Each page request retries up to _MAX_RETRIES times on timeout/connection errors
+    and 5xx responses, with increasing backoff between attempts.
+    """
     url = f"https://mp-search-api.tcgplayer.com/v1/product/{product_id}/listings"
     hdrs = {**_HEADERS, "Content-Type": "application/json"}
     all_listings, offset = [], 0
@@ -248,9 +281,41 @@ def _fetch_one(product_id):
                 "context": {"shippingCountry": "US", "cart": {"packages": {}}},
                 "aggregations": ["listingType"],
             }
-            r = session.post(url, headers=hdrs, json=payload, timeout=15)
-            if not r.ok:
+
+            r = None
+            last_exc = None
+            for attempt in range(_MAX_RETRIES):
+                try:
+                    r = session.post(url, headers=hdrs, json=payload, timeout=15)
+                    if r.status_code == 429 or r.status_code >= 500:
+                        # Retryable server-side error
+                        raise requests.exceptions.RequestException(
+                            f"HTTP {r.status_code}"
+                        )
+                    last_exc = None
+                    break
+                except (
+                    requests.exceptions.Timeout,
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.RequestException,
+                ) as e:
+                    last_exc = e
+                    if attempt < _MAX_RETRIES - 1:
+                        _log(
+                            f"page fetch failed (attempt {attempt + 1}/{_MAX_RETRIES},"
+                            f" offset {offset}): {e} — retrying in"
+                            f" {_RETRY_BACKOFF[attempt]}s"
+                        )
+                        time.sleep(_RETRY_BACKOFF[attempt])
+                    else:
+                        _log(
+                            f"page fetch failed after {_MAX_RETRIES} attempts"
+                            f" (offset {offset}): {e}"
+                        )
+
+            if last_exc is not None or r is None or not r.ok:
                 break
+
             data = r.json()
             if "results" not in data or not data["results"]:
                 break
@@ -260,6 +325,8 @@ def _fetch_one(product_id):
             all_listings.extend(listings)
             if len(listings) < size:
                 break
+            if page_cb:
+                page_cb(len(all_listings))
             offset += size
     finally:
         session.close()
@@ -285,24 +352,28 @@ def _normalize_listings(raw):
             others = _LANG_OTHERS.replace(lang + "|", "").replace("|" + lang, "")
             if re.search(others, title, re.I):
                 continue
-        sd = item.get("sellerShippingPrice") == 0 and item.get("shippingPrice", 0) > 0
+        raw_seller_ship = item.get("sellerShippingPrice")
+        raw_buyer_ship  = item.get("shippingPrice")
+        sd = raw_seller_ship == 0 and (raw_buyer_ship or 0) > 0
         with contextlib.suppress(Exception):
             progs = item.get("sellerPrograms") or []
             normalized.append({
-                "price":          item.get("price"),
-                "shipping":       item.get("shippingPrice"),
-                "total":          (item.get("price") or 0) + (item.get("shippingPrice") or 0),
-                "shipping_deal":  sd,
-                "seller":         item.get("sellerName"),
-                "seller_id":      item.get("sellerId"),
-                "goldSeller":     item.get("goldSeller", False),
-                "directSeller":   bool(item.get("directSeller") or item.get("directListing") or "Direct" in progs),
-                "sellerPrograms": progs,
-                "condition":      item.get("condition"),
-                "sku":            int(item.get("productConditionId") or 0),
-                "sellerKey":      item.get("sellerKey"),
-                "title":          title or "No Picture Linked",
-                "custom_listing_key": item.get("customData", {}).get("linkId", "No Picture Linked"),
+                "price":                item.get("price"),
+                "shipping":             raw_buyer_ship,
+                "total":                (item.get("price") or 0) + (raw_buyer_ship or 0),
+                "shipping_deal":        sd,
+                "seller":               item.get("sellerName"),
+                "seller_id":            item.get("sellerId"),
+                "goldSeller":           item.get("goldSeller", False),
+                "directSeller":         bool(item.get("directSeller") or item.get("directListing") or "Direct" in progs),
+                "sellerPrograms":       progs,
+                "condition":            item.get("condition"),
+                "sku":                  int(item.get("productConditionId") or 0),
+                "sellerKey":            item.get("sellerKey"),
+                "title":                title or "No Picture Linked",
+                "custom_listing_key":   item.get("customData", {}).get("linkId", "No Picture Linked"),
+                "_raw_seller_shipping": raw_seller_ship,
+                "_raw_buyer_shipping":  raw_buyer_ship,
             })
     return normalized
 
@@ -347,9 +418,14 @@ def handle_fetch_listings(params):
     total = len(tasks)
     done = 0
 
+    def _make_page_cb(card_name):
+        def cb(count):
+            _send({"type": "card_page_progress", "card": card_name, "fetched": count})
+        return cb
+
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_map = {
-            ex.submit(_fetch_one, t["productId"]): t
+            ex.submit(_fetch_one, t["productId"], _make_page_cb(t["displayName"])): t
             for t in tasks
         }
         for future in as_completed(future_map):

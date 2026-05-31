@@ -141,14 +141,14 @@ async function run() {
       while (true) {
         const hasSelections = pendingSelections.length > 0;
         const promptText    = hasSelections
-          ? 'Select a game  (↑↓←→ navigate   ENTER select   D: done   R: restart)'
-          : 'Select a game  (↑↓←→ navigate   ENTER select   ESC: back)';
+          ? 'Select a game  (D: done   R: restart)'
+          : 'Select a game';
         const extraKeys     = hasSelections
           ? { d: '__done__', D: '__done__', r: '__restart__', R: '__restart__' }
           : { d: '__done__', D: '__done__' };
 
         ui.sectionClear();
-        const gameChoice = await ui.showGridSelect(gameNames, promptText, { extraKeys });
+        const gameChoice = await ui.showGridSelectWithSearch(gameNames, promptText, { extraKeys });
 
         if (!gameChoice || gameChoice === '__done__') break;
 
@@ -278,7 +278,9 @@ async function run() {
       );
 
       ui.sectionClear();
-      progressUpdater = ui.showProgress(tasks.length);
+      const progressHandlers = ui.showProgress(tasks.length);
+      progressUpdater = progressHandlers.onComplete;
+      cardPageUpdater = progressHandlers.onPage;
 
       let allCardData;
       try {
@@ -289,6 +291,7 @@ async function run() {
         return;
       } finally {
         progressUpdater = null;
+        cardPageUpdater = null;
       }
 
       // ── build first-listing cart (cheapest per card, no filter) ────
@@ -350,7 +353,10 @@ async function run() {
 
       if (openBrowser) {
         ui.sectionClear();
-        cartProgressUpdater = ui.showCartProgress(chosenCart.length);
+        cartProgressUpdater = ui.showCartProgress(chosenCart.length, {
+          cartTitle: dynamicResult.cartTitle,
+          ...dynamicResult.summary,
+        });
 
         let cartResult = { cookiePath: null, failedItems: [] };
         try {
@@ -383,18 +389,26 @@ async function run() {
   ui.header('Loading…');
   const theme = await ipc.call('get_theme', {});
   ui.applyTheme(theme.primary, theme.secondary, theme.accent);
-  await ui.runSplash(theme.artContent, theme.primary);
+  await ui.runSplash(theme.artContent, theme.primary, theme.pokemonName);
 
   // Register progress handlers once; closures update the active callback each run
   let progressUpdater     = null;
+  let cardPageUpdater     = null;
   let cartProgressUpdater = null;
-  ipc.on('progress',      msg => progressUpdater     && progressUpdater(msg.card));
-  ipc.on('cart_progress', msg => cartProgressUpdater && cartProgressUpdater(msg.card));
+  ipc.on('progress',           msg => progressUpdater     && progressUpdater(msg.card));
+  ipc.on('card_page_progress', msg => cardPageUpdater     && cardPageUpdater(msg.card, msg.fetched));
+  ipc.on('cart_progress',      msg => cartProgressUpdater && cartProgressUpdater(msg.card));
 
   // ── main screen loop ────────────────────────────────────────────────────
   while (true) {
     const action = await ui.showMainScreen();
     if (action === 'exit') break;
+    if (action === 'restart') {
+      const theme = await ipc.call('get_theme', {});
+      ui.applyTheme(theme.primary, theme.secondary, theme.accent);
+      await ui.runSplash(theme.artContent, theme.primary, theme.pokemonName);
+      continue;
+    }
     await runOptimizeFlow();
   }
 
