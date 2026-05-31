@@ -664,6 +664,26 @@ function showMultiSelect(items, promptText, opts = {}) {
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
     const selected = new Set();
+    let undoPrev = null;
+
+    const actionBar = blessed.text({
+      parent: outerBox,
+      top: 2, left: 1, right: 1, height: 1,
+      content: '',
+      style: { bg: '#000000' },
+      tags: true,
+    });
+    activeHints.push(actionBar);
+
+    function renderActionBar() {
+      const undoColor = undoPrev !== null ? PRIMARY : '#555555';
+      actionBar.setContent(
+        `  {${SECONDARY}-fg}[ A ] Select All{/}   ` +
+        `{${SECONDARY}-fg}[ D ] Deselect All{/}   ` +
+        `{${undoColor}-fg}[ U ] Undo{/}`
+      );
+      screen.render();
+    }
 
     if (opts.initialSelected) {
       for (const name of opts.initialSelected) {
@@ -778,10 +798,31 @@ function showMultiSelect(items, promptText, opts = {}) {
     gridBox.key(['q', 'Q'], () => {
       cleanupAndResolve({ action: 'exit', selected: [] });
     });
+    gridBox.key(['a', 'A'], () => {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) selected.add(i);
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['d', 'D'], () => {
+      undoPrev = new Set(selected);
+      selected.clear();
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['u', 'U'], () => {
+      if (undoPrev === null) return;
+      selected.clear();
+      for (const idx of undoPrev) selected.add(idx);
+      undoPrev = null;
+      renderActionBar();
+      render();
+    });
     km.add('escape', () => cleanupAndResolve({ action: 'restart', selected: [] }));
 
     gridBox.focus();
     activeWidget = gridBox;
+    renderActionBar();
     render();
   });
 }

@@ -199,52 +199,13 @@ async function run() {
           continue;
         }
 
-        ui.sectionClear();
-        const scrapeOpts = [
-          '1. Inclusive – pick specific cards',
-          '2. Exclusive – whole set minus a few',
-          '3. All Cards',
-        ];
-        const scrapeChoice = await ui.showGridSelect(
-          scrapeOpts,
-          `Set: ${setName} — How would you like to scrape?`,
-          { cols: 1 }
+        const selResult = await runCardSelection(
+          cardNames, `Select cards from ${setName}`, setName
         );
-        if (!scrapeChoice) continue;
-
-        let selectedCardNames = [];
-        let selectedCardIds   = [];
-        let cardSelRestart    = false;
-
-        if (scrapeChoice === scrapeOpts[0]) {
-          const selResult = await runCardSelection(
-            cardNames, `Select cards to INCLUDE from ${setName}`, setName
-          );
-          if (selResult.action === 'home')    return;
-          if (selResult.action === 'restart') { cardSelRestart = true; }
-          else {
-            selectedCardNames = selResult.selected;
-            selectedCardIds   = selectedCardNames.map(n => cardData[n]);
-          }
-
-        } else if (scrapeChoice === scrapeOpts[1]) {
-          const selResult = await runCardSelection(
-            cardNames, `Select cards to EXCLUDE from ${setName}`, setName
-          );
-          if (selResult.action === 'home')    return;
-          if (selResult.action === 'restart') { cardSelRestart = true; }
-          else {
-            const excSet = new Set(selResult.selected);
-            selectedCardNames = cardNames.filter(n => !excSet.has(n));
-            selectedCardIds   = selectedCardNames.map(n => cardData[n]);
-          }
-
-        } else {
-          selectedCardNames = [...cardNames];
-          selectedCardIds   = [...cardIds];
-        }
-
-        if (cardSelRestart) continue;
+        if (selResult.action === 'home')    return;
+        if (selResult.action === 'restart') continue;
+        const selectedCardNames = selResult.selected;
+        const selectedCardIds   = selectedCardNames.map(n => cardData[n]);
 
         if (!selectedCardNames.length) {
           ui.muted('No cards selected.');
