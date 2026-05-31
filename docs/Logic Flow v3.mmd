@@ -16,8 +16,7 @@ flowchart TB
     n15 --> n16["Yes"] & n17["No"]
     n16 --> n9
     n18["Add cards to cart?"] --> n19["Yes"] & n20["No"]
-    n17 --> n18
-    n19 --> n21["cart_create.py function"]
+    n19 --> n21@{ label: "cart_create.py function<br><span style=\"padding-left:\">Playwright API Calls<br>Browser Cart Display</span>" }
     n13 --> n23["Save .txt file"]
     n23 --> n12
     n14 --> n24["Wipe previous card selections (if any) and load directly from txt file, cross checking with allowed card names in set"]
@@ -27,13 +26,19 @@ flowchart TB
     n27 --> n28["Yes"] & n29["NO"]
     n29 --> n2
     n28 --> n9
-    n11 --> n18
-    n31 -- "<span style=padding-left: 8px; padding-right: 8px; text-align: center; justify-content: center;>User clicks on 'TCG' sprite</span>" --> n32["APP: Optimize by TCG"]
+    n31 -- "<span style=padding-left:>User clicks on 'TCG' sprite</span>" --> n32["APP: Optimize by TCG"]
     n31 -- User choses full 'Exit' --> n33["Exit Shell and Terminal"]
     n32 -- <br> --> n2
-    n21 --> n31
+    n21 -- User presses enter/space/q --> n31
     n25 --> n31
     n20 --> n31
+    n11 --> n35["Initial Optimization"]
+    n17 --> n35
+    n35 --> n36["Dynamic Optimization Window"]
+    n36 -- User affirms filter choices and optimization output --> n18
+    n37@{ label: "'Esc/exit chosen" } --> n31
+    n36 --> n37 & n38@{ label: "'r or restart' chosen" }
+    n38 --> n10
 
     n1@{ shape: rounded}
     n3@{ shape: rounded}
@@ -50,3 +55,6 @@ flowchart TB
     n21@{ shape: rounded}
     n24@{ shape: extract}
     n27@{ shape: decision}
+    n36@{ shape: rounded}
+    n37@{ shape: rounded}
+    n38@{ shape: rect}

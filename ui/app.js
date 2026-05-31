@@ -153,7 +153,7 @@ function parseArtColors(content) {
 
 // ── splash ─────────────────────────────────────────────────────────────────
 
-function runSplash(artContent, primary) {
+function runSplash(artContent, primary, pokemonName) {
   return new Promise(resolve => {
     logBox.hide();
 
@@ -161,9 +161,11 @@ function runSplash(artContent, primary) {
     const artH        = parsedLines.length;
     const maxArtWidth = Math.max(1, ...parsedLines.map(l => l.length));
     const boxW        = Math.max(1, (screen.cols || screen.width || 120) - 2);
+    // Reserve 2 extra rows below sprite for blank line + name
+    const nameRows    = pokemonName ? 2 : 0;
     const boxH        = Math.max(1, (screen.rows || screen.height || 40) - 2);
     const leftPad     = Math.max(0, Math.floor((boxW - maxArtWidth) / 2));
-    const topPad      = Math.max(0, Math.floor((boxH - artH) / 2));
+    const topPad      = Math.max(0, Math.floor((boxH - artH - nameRows) / 2));
     const padStr      = ' '.repeat(leftPad);
 
     const artBox = blessed.box({
@@ -211,6 +213,34 @@ function runSplash(artContent, primary) {
         }
         lines.push(out);
       }
+
+      // Name label below the sprite
+      if (pokemonName) {
+        lines.push(''); // blank spacer
+        const nameRow  = artH + 1;
+        const nameLen  = pokemonName.length;
+        const namePad  = Math.max(0, Math.floor((boxW - nameLen) / 2));
+        let nameOut    = ' '.repeat(namePad);
+        for (let col = 0; col < nameLen; col++) {
+          const ch  = pokemonName[col];
+          let fr = r, fg = g, fb = b;
+          const diag = ((namePad + col) / (maxArtWidth - 1 || 1)) - (nameRow / (artH - 1 || 1));
+          const dist = Math.abs(diag - bandPos);
+          if (dist < bandHW) {
+            const blend = (1 - dist / bandHW) * t;
+            fr = Math.min(255, Math.round(fr + (255 - fr) * blend));
+            fg = Math.min(255, Math.round(fg + (255 - fg) * blend));
+            fb = Math.min(255, Math.round(fb + (255 - fb) * blend));
+          }
+          const rh  = fr.toString(16).padStart(2, '0');
+          const gh  = fg.toString(16).padStart(2, '0');
+          const bh  = fb.toString(16).padStart(2, '0');
+          const esc = ch === '{' ? '\\{' : ch === '}' ? '\\}' : ch;
+          nameOut += `{bold}{#${rh}${gh}${bh}-fg}${esc}{/}`;
+        }
+        lines.push(nameOut);
+      }
+
       return lines.join('\n');
     }
 
@@ -368,6 +398,260 @@ function showGridSelect(items, promptText, opts = {}) {
   });
 }
 
+// ── 3-column grid select with search bar ──────────────────────────────────
+
+function showGridSelectWithSearch(items, promptText, opts = {}) {
+  return new Promise(resolve => {
+    sectionClear();
+    logBox.hide();
+    hintWidget(promptText, 0, '#cccccc');
+    hintWidget('  Type to search   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
+
+    const COLS = opts.cols || 3;
+    let query = '';
+    let filtered = [...items];
+    let listCursor = 0;
+    let curRow = 0, curCol = 0;
+    let destroyed = false;
+    let flashTimer = null;
+    const km = makeKeyManager();
+
+    function cleanupAndResolve(value) {
+      destroyed = true;
+      km.cleanup();
+      inputBox.destroy();
+      contentBox.destroy();
+      activeWidget = null;
+      resolve(value);
+    }
+
+    const inputBox = blessed.textbox({
+      parent: outerBox,
+      top: 3, left: 1, right: 1, height: 1,
+      style: { fg: PRIMARY, bg: '#000000' },
+      inputOnFocus: true,
+    });
+
+    const contentBox = blessed.box({
+      parent:       outerBox,
+      top: 4, left: 1, right: 1, bottom: 2,
+      scrollable:   true,
+      alwaysScroll: true,
+      keys:         true,
+      tags:         true,
+      scrollbar: { ch: '│', style: { fg: PRIMARY } },
+    });
+
+    function gridTotalRows() {
+      return Math.ceil(items.length / COLS);
+    }
+
+    function clampCol() {
+      const tRows  = gridTotalRows();
+      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / tRows));
+      if (curCol > maxCol) curCol = maxCol;
+    }
+
+    function renderGrid() {
+      const tRows    = gridTotalRows();
+      const w        = Math.max(30, (screen.width || 120) - 6);
+      const colWidth = Math.floor(w / COLS);
+      const maxText  = Math.max(4, colWidth - 2);
+      const lines    = [];
+
+      for (let r = 0; r < tRows; r++) {
+        let line = '';
+        for (let c = 0; c < COLS; c++) {
+          const idx  = c * tRows + r;
+          if (idx >= items.length) { line += ' '.repeat(colWidth); continue; }
+          const name  = items[idx];
+          const isCur = (r === curRow && c === curCol);
+          const cell  = name.length > maxText
+            ? name.substring(0, maxText - 1) + '…'
+            : name.padEnd(maxText);
+          line += isCur
+            ? `{#ffffff-bg}{#000000-fg} ${escape(cell)} {/}`
+            : `{${SECONDARY}-fg} ${escape(cell)} {/}`;
+        }
+        lines.push(line);
+      }
+      contentBox.setContent(lines.join('\n'));
+
+      const visH = Math.max(1, contentBox.height);
+      const base  = contentBox.childBase || 0;
+      if (curRow >= base + visH) contentBox.scrollTo(curRow - visH + 1);
+      else if (curRow < base)    contentBox.scrollTo(curRow);
+
+      screen.render();
+    }
+
+    function renderList() {
+      if (filtered.length === 0) {
+        contentBox.setContent(`{#888888-fg}  No matches{/}`);
+      } else {
+        const lines = filtered.map((item, idx) => {
+          const isCur = idx === listCursor;
+          const cell  = escape(item);
+          return isCur
+            ? `{#ffffff-bg}{#000000-fg} ${cell} {/}`
+            : `{${SECONDARY}-fg} ${cell} {/}`;
+        });
+        contentBox.setContent(lines.join('\n'));
+      }
+
+      const visH = Math.max(1, contentBox.height);
+      const base  = contentBox.childBase || 0;
+      if (listCursor >= base + visH) contentBox.scrollTo(listCursor - visH + 1);
+      else if (listCursor < base)    contentBox.scrollTo(listCursor);
+
+      screen.render();
+    }
+
+    function render() {
+      if (query.length > 0) renderList();
+      else renderGrid();
+    }
+
+    function flashInvalidInput() {
+      if (flashTimer) return;
+      const origBg = inputBox.style.bg;
+      const origFg = inputBox.style.fg;
+      inputBox.style.bg = '#550000';
+      inputBox.style.fg = '#ff6666';
+      const warn = blessed.text({
+        parent: outerBox,
+        top: 2, left: 1, right: 1, height: 1,
+        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
+        style: { bg: '#000000' },
+        tags: true,
+      });
+      screen.render();
+      inputBox.focus();
+      flashTimer = setTimeout(() => {
+        flashTimer = null;
+        if (destroyed) return;
+        inputBox.style.bg = origBg;
+        inputBox.style.fg = origFg;
+        try { warn.destroy(); } catch (_) {}
+        screen.render();
+        inputBox.focus();
+      }, 900);
+    }
+
+    function updateQuery() {
+      if (destroyed) return;
+      const val = inputBox.getValue();
+      query = val;
+      if (query) {
+        filtered    = items.filter(c => c.toLowerCase().includes(query.toLowerCase()));
+        listCursor  = 0;
+      } else {
+        filtered    = [...items];
+        listCursor  = 0;
+      }
+      render();
+    }
+
+    inputBox.on('keypress', (ch, key) => {
+      const name    = key && key.name;
+      const navKeys = ['tab', 'up', 'down', 'left', 'right', 'enter', 'return', 'escape', 'pageup', 'pagedown'];
+      if (navKeys.includes(name) || (key && key.full === 'S-tab')) return;
+      setImmediate(updateQuery);
+    });
+
+    inputBox.key('tab', () => {
+      inputBox.setValue(inputBox.getValue().replace(/\t/g, ''));
+      if (query.length > 0 && filtered.length > 0) {
+        listCursor = (listCursor + 1) % filtered.length;
+        render();
+        inputBox.focus();
+      }
+    });
+
+    inputBox.key('S-tab', () => {
+      inputBox.setValue(inputBox.getValue().replace(/\t/g, ''));
+      if (query.length > 0 && filtered.length > 0) {
+        listCursor = (listCursor - 1 + filtered.length) % filtered.length;
+        render();
+        inputBox.focus();
+      }
+    });
+
+    inputBox.key('up', () => {
+      if (query.length === 0) {
+        if (curRow > 0) { curRow--; clampCol(); render(); }
+      } else {
+        if (listCursor > 0) { listCursor--; render(); }
+      }
+    });
+
+    inputBox.key('down', () => {
+      if (query.length === 0) {
+        if (curRow < gridTotalRows() - 1) { curRow++; clampCol(); render(); }
+      } else {
+        if (listCursor < filtered.length - 1) { listCursor++; render(); }
+      }
+    });
+
+    inputBox.key('left', () => {
+      if (query.length === 0 && curCol > 0) { curCol--; render(); }
+    });
+
+    inputBox.key('right', () => {
+      if (query.length === 0) {
+        const tRows  = gridTotalRows();
+        const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / tRows));
+        if (curCol < maxCol) { curCol++; render(); }
+      }
+    });
+
+    inputBox.key('pageup', () => {
+      if (query.length === 0) {
+        curRow = Math.max(0, curRow - Math.max(1, contentBox.height));
+        clampCol(); render();
+      } else {
+        listCursor = Math.max(0, listCursor - Math.max(1, contentBox.height));
+        render();
+      }
+    });
+
+    inputBox.key('pagedown', () => {
+      if (query.length === 0) {
+        curRow = Math.min(gridTotalRows() - 1, curRow + Math.max(1, contentBox.height));
+        clampCol(); render();
+      } else {
+        listCursor = Math.min(filtered.length - 1, listCursor + Math.max(1, contentBox.height));
+        render();
+      }
+    });
+
+    inputBox.key(['enter', 'return'], () => {
+      if (query.length > 0) {
+        if (filtered.length === 0) { flashInvalidInput(); return; }
+        cleanupAndResolve(filtered[listCursor]);
+      } else {
+        const tRows = gridTotalRows();
+        const idx   = curCol * tRows + curRow;
+        if (idx < items.length) cleanupAndResolve(items[idx]);
+      }
+    });
+
+    km.add('escape', () => cleanupAndResolve(null));
+
+    if (opts.extraKeys) {
+      for (const [key, val] of Object.entries(opts.extraKeys)) {
+        inputBox.key(key, () => {
+          if (query.length === 0) cleanupAndResolve(val);
+        });
+      }
+    }
+
+    inputBox.focus();
+    activeWidget = inputBox;
+    render();
+  });
+}
+
 // ── 3-column multi-select ──────────────────────────────────────────────────
 
 function showMultiSelect(items, promptText, opts = {}) {
@@ -512,9 +796,12 @@ function showAutocomplete(choices, promptText) {
     hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
+    let destroyed = false;
+    let flashTimer = null;
     const km = makeKeyManager();
 
     function cleanupAndResolve(value) {
+      destroyed = true;
       km.cleanup();
       inputBox.destroy();
       dropList.destroy();
@@ -546,6 +833,32 @@ function showAutocomplete(choices, promptText) {
       tags: false,
     });
 
+    function flashInvalidInput() {
+      if (flashTimer) return;
+      const origBg = inputBox.style.bg;
+      const origFg = inputBox.style.fg;
+      inputBox.style.bg = '#550000';
+      inputBox.style.fg = '#ff6666';
+      const warn = blessed.text({
+        parent: outerBox,
+        top: 2, left: 1, right: 1, height: 1,
+        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
+        style: { bg: '#000000' },
+        tags: true,
+      });
+      screen.render();
+      inputBox.focus();
+      flashTimer = setTimeout(() => {
+        flashTimer = null;
+        if (destroyed) return;
+        inputBox.style.bg = origBg;
+        inputBox.style.fg = origFg;
+        try { warn.destroy(); } catch (_) {}
+        screen.render();
+        inputBox.focus();
+      }, 900);
+    }
+
     function refresh(val) {
       filtered = choices.filter(c => c.toLowerCase().includes(val.toLowerCase()));
       dropList.setItems(filtered);
@@ -572,10 +885,12 @@ function showAutocomplete(choices, promptText) {
     inputBox.key('down', () => dropList.focus());
 
     inputBox.key(['enter', 'return'], () => {
+      if (filtered.length === 0) { flashInvalidInput(); return; }
       cleanupAndResolve(filtered[dropList.selected] ?? null);
     });
 
     dropList.key(['enter', 'return'], () => {
+      if (filtered.length === 0) { flashInvalidInput(); return; }
       cleanupAndResolve(filtered[dropList.selected] ?? null);
     });
 
@@ -694,22 +1009,55 @@ function showProgress(total) {
   });
   progressWidgets.push(statusText);
 
+  const pctText = blessed.text({
+    parent: outerBox,
+    top: 5, right: 2,
+    content: '',
+    style: { fg: SECONDARY },
+    tags: true,
+  });
+  progressWidgets.push(pctText);
+
   let done = 0;
-  return function update(cardName) {
+
+  function onComplete(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
     barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
+    pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
     screen.render();
-  };
+  }
+
+  function onPage(cardName, count) {
+    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)} [${count}]{/}`);
+    screen.render();
+  }
+
+  return { onComplete, onPage };
 }
 
 // ── progress bar (cart creation) ──────────────────────────────────────────
 
-function showCartProgress(total) {
+function showCartProgress(total, summaryInfo) {
   sectionClear();
   header('Creating cart — adding items to TCGPlayer…');
   muted('  Browser is launching. This may take a minute.');
+
+  if (summaryInfo) {
+    const divider = `{#444444-fg}${'─'.repeat(50)}{/}`;
+    logBox.log('');
+    logBox.log(divider);
+    logBox.log(`{${SECONDARY}-fg}  Selected: {bold}{${PRIMARY}-fg}${escape(summaryInfo.cartTitle)}{/}`);
+    logBox.log(
+      `{${SECONDARY}-fg}  Sellers: ${summaryInfo.sellers}` +
+      `   Cards: $${summaryInfo.rawCost.toFixed(2)}` +
+      `   Shipping: $${summaryInfo.shipping.toFixed(2)}` +
+      `   Total: $${summaryInfo.total.toFixed(2)}{/}`
+    );
+    logBox.log(divider);
+    screen.render();
+  }
 
   const barTrack = blessed.box({
     parent: outerBox,
@@ -733,12 +1081,22 @@ function showCartProgress(total) {
   });
   progressWidgets.push(statusText);
 
+  const pctText = blessed.text({
+    parent: outerBox,
+    bottom: 2, right: 2,
+    content: '',
+    style: { fg: SECONDARY },
+    tags: true,
+  });
+  progressWidgets.push(pctText);
+
   let done = 0;
   return function update(cardName) {
     done++;
     const pct = Math.round((done / total) * 100);
     barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
     statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
+    pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
     screen.render();
   };
 }
@@ -998,14 +1356,16 @@ function showMainScreen() {
     const topOff  = Math.max(1, Math.floor((screenH - totalH) / 2));
     const leftOff = Math.max(1, Math.floor((screenW - boxW) / 2));
 
-    let focused = 0; // 0 = launch icon, 1 = exit
+    let focused = 0; // 0 = launch icon, 1 = restart, 2 = exit
     const km    = makeKeyManager();
 
     function done(value) {
       km.cleanup();
-      try { iconBox.destroy();    } catch (_) {}
-      try { labelWidget.destroy(); } catch (_) {}
-      try { exitWidget.destroy(); } catch (_) {}
+      try { welcomeWidget.destroy();  } catch (_) {}
+      try { iconBox.destroy();        } catch (_) {}
+      try { labelWidget.destroy();    } catch (_) {}
+      try { restartWidget.destroy();  } catch (_) {}
+      try { exitWidget.destroy();     } catch (_) {}
       activeWidget = null;
       logBox.show();
       screen.render();
@@ -1045,9 +1405,25 @@ function showMainScreen() {
     const lPad = Math.max(0, Math.floor((boxW - labelStr.length) / 2));
     labelWidget.setContent(`{bold}{${PRIMARY}-fg}${' '.repeat(lPad)}${escape(labelStr)}{/}`);
 
-    // Exit button
-    const exitStr    = '[ Exit ]';
-    const exitLeft   = leftOff + Math.max(0, Math.floor((boxW - exitStr.length) / 2));
+    // Buttons: [ Restart App ] and [ Exit ] on the same row, centered under the icon
+    const restartStr  = '[ Restart App ]';
+    const exitStr     = '[ Exit ]';
+    const btnGap      = 3;
+    const totalBtnsW  = restartStr.length + btnGap + exitStr.length;
+    const btnsLeft    = leftOff + Math.max(0, Math.floor((boxW - totalBtnsW) / 2));
+    const restartLeft = btnsLeft;
+    const exitLeft    = btnsLeft + restartStr.length + btnGap;
+
+    const restartWidget = blessed.box({
+      parent: outerBox,
+      top:    topOff + boxH + 3,
+      left:   restartLeft,
+      width:  restartStr.length + 1,
+      height: 1,
+      tags:   true,
+      mouse:  true,
+    });
+
     const exitWidget = blessed.box({
       parent: outerBox,
       top:    topOff + boxH + 3,
@@ -1058,26 +1434,429 @@ function showMainScreen() {
       mouse:  true,
     });
 
+    // Welcome banner — top of screen, inside border
+    const welcomeText = 'Welcome to MasterSet Helper';
+    const wPad = Math.max(0, Math.floor((screenW - welcomeText.length) / 2));
+    const welcomeWidget = blessed.text({
+      parent:  outerBox,
+      top:     1,
+      left:    1,
+      right:   1,
+      height:  1,
+      content: `{bold}{${PRIMARY}-fg}${' '.repeat(wPad)}${escape(welcomeText)}{/}`,
+      style:   { bg: '#000000' },
+      tags:    true,
+    });
+
     function render() {
-      if (focused === 0) {
-        iconBox.style.border.fg = PRIMARY;
-        exitWidget.setContent(`{#555555-fg}${escape(exitStr)}{/}`);
-      } else {
-        iconBox.style.border.fg = '#333333';
-        exitWidget.setContent(`{#ffffff-bg}{#000000-fg}${escape(exitStr)}{/}`);
-      }
+      iconBox.style.border.fg = focused === 0 ? PRIMARY : '#333333';
+      restartWidget.setContent(focused === 1
+        ? `{#ffffff-bg}{#000000-fg}${escape(restartStr)}{/}`
+        : `{#555555-fg}${escape(restartStr)}{/}`);
+      exitWidget.setContent(focused === 2
+        ? `{#ffffff-bg}{#000000-fg}${escape(exitStr)}{/}`
+        : `{#555555-fg}${escape(exitStr)}{/}`);
       screen.render();
     }
 
-    km.add(['up', 'down', 'tab', 'S-tab'], () => { focused = 1 - focused; render(); });
-    km.add(['enter', 'return'],            () => done(focused === 0 ? 'launch' : 'exit'));
+    km.add(['down', 'tab'],   () => { focused = (focused + 1) % 3; render(); });
+    km.add(['up', 'S-tab'],   () => { focused = (focused + 2) % 3; render(); });
+    km.add(['left', 'right'], () => {
+      if (focused === 1) { focused = 2; render(); }
+      else if (focused === 2) { focused = 1; render(); }
+    });
+    km.add(['enter', 'return'], () => {
+      if (focused === 0) done('launch');
+      else if (focused === 1) done('restart');
+      else done('exit');
+    });
 
-    iconBox.on('click',    () => done('launch'));
-    exitWidget.on('click', () => done('exit'));
+    iconBox.on('mouseover',       () => { focused = 0; render(); });
+    restartWidget.on('mouseover', () => { focused = 1; render(); });
+    exitWidget.on('mouseover',    () => { focused = 2; render(); });
+
+    iconBox.on('click',       () => done('launch'));
+    restartWidget.on('click', () => done('restart'));
+    exitWidget.on('click',    () => done('exit'));
 
     iconBox.focus();
     activeWidget = iconBox;
     render();
+  });
+}
+
+// ── cart summary helpers (also used by main.js) ───────────────────────────
+
+function calcShipping(cart) {
+  const sellers = {};
+  for (const item of cart) {
+    const sid = item.seller_id || item.seller;
+    if (!sellers[sid]) sellers[sid] = { price: 0, ship: 0, deal: false };
+    sellers[sid].price += item.price || 0;
+    if ((item.shipping || 0) > sellers[sid].ship) sellers[sid].ship = item.shipping;
+    if (item.shipping_deal) sellers[sid].deal = true;
+  }
+  let total = 0;
+  for (const s of Object.values(sellers)) {
+    if (!(s.deal && s.price >= 5)) total += s.ship;
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function buildSummary(cart) {
+  const sellers = new Set(cart.map(i => i.seller).filter(Boolean));
+  const rawCost = cart.reduce((s, i) => s + (i.price || 0), 0);
+  const shipping = calcShipping(cart);
+  return { sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
+}
+
+// ── dynamic optimizer screen ──────────────────────────────────────────────
+//
+// Three selectable cart summaries across the top (First Listing, Default
+// Optimized, Your Cart), with Condition and Seller Qualification filter
+// panels below that live-update Column 3 on every toggle.
+//
+// Returns Promise<{ action: 'confirm'|'restart'|'home', cart: [...] }>
+
+function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilters = {}) {
+  return new Promise(resolve => {
+    sectionClear();
+    logBox.hide();
+
+    const km = makeKeyManager();
+
+    // ── state ──────────────────────────────────────────────────────────
+    let zone         = 0;   // 0 = top (carts)   1 = bottom (filters)
+    let selectedCart = 1;   // 0 = first   1 = default   2 = user
+    let filterCol    = 0;   // 0 = conditions   1 = sellerQuals
+    const filterRows = [0, 0];
+
+    const CONDITIONS = filterOptions.conditions;
+    const QUALS      = filterOptions.sellerQuals;
+    const QUAL_LABELS = {
+      Verified: 'Verified Seller',
+      Direct:   'Direct',
+      WPN:      'WPN',
+    };
+
+    // Default checked state mirrors Column 2's optimization criteria
+    const defaultConds = defaultFilters.conditions || ['Near Mint', 'Lightly Played'];
+    const defaultQuals = defaultFilters.quals || ['Verified'];
+    const condChecked = new Set(defaultConds.filter(c => CONDITIONS.includes(c)));
+    const qualChecked = new Set(defaultQuals.filter(q => QUALS.includes(q)));
+
+    let userCart         = defaultCart;
+    let currentOverrides = [];
+    let isCalc           = false;
+    let debounceId       = null;
+    let spinnerTimer     = null;
+    let spinnerFrame     = 0;
+    const SPINNER     = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+    const summaries = [
+      buildSummary(firstCart),
+      buildSummary(defaultCart),
+      buildSummary(userCart),
+    ];
+
+    // ── layout ─────────────────────────────────────────────────────────
+    const CART_TOP   = 2;
+    const CART_H     = 7;
+    const FILTER_TOP = CART_TOP + CART_H + 2;
+    const FILTER_H   = 10;
+    const NOTICE_TOP = FILTER_TOP + FILTER_H;
+
+    // ── description line ────────────────────────────────────────────────
+    activeHints.push(blessed.text({
+      parent:  outerBox,
+      top: 0, left: 1, right: 1, height: 1,
+      content: `{${SECONDARY}-fg}Select a cart option below, or customize the filters to build your own optimized cart.{/}`,
+      style:   { bg: '#000000' },
+      tags:    true,
+    }));
+
+    // ── hint bar ────────────────────────────────────────────────────────
+    const hintWidget = blessed.text({
+      parent:  outerBox,
+      top: 1, left: 1, right: 1, height: 1,
+      content: '',
+      style:   { bg: '#000000' },
+      tags:    true,
+    });
+    activeHints.push(hintWidget);
+
+    // ── 3 cart boxes ───────────────────────────────────────────────────
+    const CART_TITLES = ['FIRST LISTING', 'DEFAULT OPTIMIZED', 'YOUR CART'];
+    const cartBoxes = [0, 1, 2].map(i => {
+      const box = blessed.box({
+        parent: outerBox,
+        top:    CART_TOP,
+        left:   `${Math.round(i * 33.33)}%`,
+        width:  i < 2 ? '33%' : undefined,
+        right:  i === 2 ? 1 : undefined,
+        height: CART_H,
+        border: { type: 'line' },
+        style:  { border: { fg: '#333333' }, bg: '#000000' },
+        tags:   true,
+        keys:   true,
+      });
+      return box;
+    });
+
+    // ── 2 filter boxes ─────────────────────────────────────────────────
+    const FILTER_LABELS = ['Filter: Condition', 'Filter: Seller Qualification'];
+    const filterBoxes = [0, 1].map(i => {
+      const box = blessed.box({
+        parent: outerBox,
+        top:    FILTER_TOP,
+        left:   i === 0 ? 0     : '50%',
+        width:  i === 0 ? '50%' : undefined,
+        right:  i === 1 ? 1     : undefined,
+        height: FILTER_H,
+        border: { type: 'line' },
+        label:  ` ${FILTER_LABELS[i]} `,
+        style:  {
+          border: { fg: '#444444' },
+          bg: '#000000',
+          label: { fg: SECONDARY },
+        },
+        tags:       true,
+        scrollable: true,
+        alwaysScroll: true,
+        keys:       true,
+      });
+      return box;
+    });
+
+    // ── notice box ─────────────────────────────────────────────────────
+    const noticeBox = blessed.box({
+      parent: outerBox,
+      top:    NOTICE_TOP,
+      left:   0,
+      right:  1,
+      bottom: 1,
+      border: { type: 'line' },
+      label:  ' Notices ',
+      style:  { border: { fg: '#444444' }, bg: '#000000', label: { fg: SECONDARY } },
+      tags:   true,
+      scrollable:   true,
+      alwaysScroll: true,
+    });
+
+    // ── cleanup ────────────────────────────────────────────────────────
+    function cleanupAndResolve(value) {
+      km.cleanup();
+      if (spinnerTimer) clearInterval(spinnerTimer);
+      if (debounceId)   clearTimeout(debounceId);
+      for (const b of [...cartBoxes, ...filterBoxes, noticeBox]) {
+        try { b.destroy(); } catch (_) {}
+      }
+      activeWidget = null;
+      logBox.show();
+      screen.render();
+      resolve(value);
+    }
+
+    // ── spinner ────────────────────────────────────────────────────────
+    function startSpinner() {
+      if (spinnerTimer) clearInterval(spinnerTimer);
+      spinnerTimer = setInterval(() => {
+        spinnerFrame = (spinnerFrame + 1) % SPINNER.length;
+        renderCartBox(2);
+      }, 80);
+    }
+
+    function stopSpinner() {
+      if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+    }
+
+    // ── debounced re-optimization ──────────────────────────────────────
+    function scheduleOptimize() {
+      if (debounceId) clearTimeout(debounceId);
+      isCalc = true;
+      startSpinner();
+      debounceId = setTimeout(async () => {
+        try {
+          const result = await call('optimize_filtered', {
+            conditions:  [...condChecked],
+            sellerQuals: [...qualChecked],
+          });
+          userCart         = result.cart;
+          currentOverrides = result.overrides || [];
+          summaries[2]     = buildSummary(userCart);
+        } catch (_) {
+          // keep previous result on error
+        } finally {
+          isCalc = false;
+          stopSpinner();
+          renderCartBox(2);
+          renderNotice();
+        }
+      }, 300);
+    }
+
+    // ── render: single cart box ────────────────────────────────────────
+    function renderCartBox(i) {
+      const box        = cartBoxes[i];
+      const isSelected = selectedCart === i;
+      const isTopZone  = zone === 0;
+
+      box.style.border.fg = (isTopZone && isSelected) ? PRIMARY : '#333333';
+
+      if (i === 2 && isCalc) {
+        const sp = SPINNER[spinnerFrame];
+        box.setContent(
+          `{bold}{${SECONDARY}-fg}${escape(CART_TITLES[i])}{/}\n\n` +
+          `{${PRIMARY}-fg}  ${sp} Recalculating…{/}`
+        );
+      } else {
+        const s     = summaries[i];
+        const color = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
+        box.setContent(
+          `{bold}{${color}-fg}${escape(CART_TITLES[i])}{/}\n` +
+          `{${color}-fg}` +
+          `  Sellers:  ${s.sellers}\n` +
+          `  Cards:    $${s.rawCost.toFixed(2)}\n` +
+          `  Shipping: $${s.shipping.toFixed(2)}\n` +
+          `  Total:    $${s.total.toFixed(2)}{/}`
+        );
+      }
+      screen.render();
+    }
+
+    // ── render: single filter box ──────────────────────────────────────
+    function renderFilterBox(col) {
+      const box      = filterBoxes[col];
+      const items    = col === 0 ? CONDITIONS : QUALS;
+      const checked  = col === 0 ? condChecked : qualChecked;
+      const cursor   = filterRows[col];
+      const isActive = zone === 1 && filterCol === col;
+
+      box.style.border.fg = isActive ? SECONDARY : '#444444';
+
+      const lines = items.map((item, idx) => {
+        const label     = col === 1 ? (QUAL_LABELS[item] || item) : item;
+        const isChecked = checked.has(item);
+        const isCursor  = isActive && idx === cursor;
+        const prefix    = isChecked ? '[x]' : '[ ]';
+        const text      = `${prefix} ${escape(label)}`;
+        if (isCursor)       return `{#ffffff-bg}{#000000-fg} ${text} {/}`;
+        if (isChecked)      return `{${PRIMARY}-fg} ${text}{/}`;
+        return `{${SECONDARY}-fg} ${text}{/}`;
+      });
+
+      box.setContent(lines.join('\n'));
+      screen.render();
+    }
+
+    // ── render: hint bar ───────────────────────────────────────────────
+    function renderHint() {
+      const hint = zone === 0
+        ? `{${PRIMARY}-fg}CARTS{/} {#888888-fg}←/→ navigate   ENTER confirm   TAB: go to filters   R restart   ESC home{/}`
+        : `{${SECONDARY}-fg}FILTERS{/} {#888888-fg}←/→ columns   ↑/↓ navigate   SPACE toggle   TAB: go to carts   R restart   ESC home{/}`;
+      hintWidget.setContent(`  ${hint}`);
+      screen.render();
+    }
+
+    // ── render: notice box ─────────────────────────────────────────────
+    function renderNotice() {
+      if (!currentOverrides.length) {
+        noticeBox.setContent('');
+        noticeBox.style.border.fg = '#444444';
+      } else {
+        noticeBox.style.border.fg = '#ff9955';
+        const lines = currentOverrides.map(o =>
+          `{#ffaa55-fg}⚠ ${escape(o.name)}{/}  {#888888-fg}(${escape(o.applied)}){/}`
+        );
+        noticeBox.setContent(lines.join('\n'));
+      }
+      screen.render();
+    }
+
+    function renderAll() {
+      for (let i = 0; i < 3; i++) renderCartBox(i);
+      for (let c = 0; c < 2; c++) renderFilterBox(c);
+      renderNotice();
+      renderHint();
+    }
+
+    // ── key bindings ───────────────────────────────────────────────────
+
+    km.add('tab', () => {
+      zone = 1 - zone;
+      if (zone === 1) {
+        filterBoxes[filterCol].focus();
+        activeWidget = filterBoxes[filterCol];
+      } else {
+        cartBoxes[selectedCart].focus();
+        activeWidget = cartBoxes[selectedCart];
+      }
+      renderAll();
+    });
+
+    km.add('left', () => {
+      if (zone === 0) {
+        if (selectedCart > 0) { selectedCart--; renderAll(); }
+      } else {
+        if (filterCol > 0) { filterCol--; renderAll(); filterBoxes[filterCol].focus(); }
+      }
+    });
+
+    km.add('right', () => {
+      if (zone === 0) {
+        if (selectedCart < 2) { selectedCart++; renderAll(); }
+      } else {
+        if (filterCol < 1) { filterCol++; renderAll(); filterBoxes[filterCol].focus(); }
+      }
+    });
+
+    km.add('up', () => {
+      if (zone === 1 && filterRows[filterCol] > 0) {
+        filterRows[filterCol]--;
+        renderFilterBox(filterCol);
+      }
+    });
+
+    km.add('down', () => {
+      if (zone === 1) {
+        const items = filterCol === 0 ? CONDITIONS : QUALS;
+        if (filterRows[filterCol] < items.length - 1) {
+          filterRows[filterCol]++;
+          renderFilterBox(filterCol);
+        }
+      }
+    });
+
+    km.add('space', () => {
+      if (zone !== 1) return;
+      const items   = filterCol === 0 ? CONDITIONS : QUALS;
+      const checked = filterCol === 0 ? condChecked : qualChecked;
+      const item    = items[filterRows[filterCol]];
+      if (!item) return;
+      if (checked.has(item)) checked.delete(item);
+      else                   checked.add(item);
+      renderFilterBox(filterCol);
+      scheduleOptimize();
+    });
+
+    km.add(['enter', 'return'], () => {
+      if (selectedCart === 2 && isCalc) return; // block Column 3 while calculating
+      const carts = [firstCart, defaultCart, userCart];
+      cleanupAndResolve({
+        action: 'confirm',
+        cart: carts[selectedCart],
+        cartTitle: CART_TITLES[selectedCart],
+        summary: summaries[selectedCart],
+      });
+    });
+
+    km.add(['r', 'R'], () => cleanupAndResolve({ action: 'restart' }));
+    km.add('escape',    () => cleanupAndResolve({ action: 'home' }));
+
+    // ── initial focus & render ─────────────────────────────────────────
+    cartBoxes[selectedCart].focus();
+    activeWidget = cartBoxes[selectedCart];
+    renderAll();
   });
 }
 
@@ -1097,6 +1876,7 @@ module.exports = {
   showMainScreen,
   showWelcome,
   showGridSelect,
+  showGridSelectWithSearch,
   showMultiSelect,
   showAutocomplete,
   showConfirm,
@@ -1107,5 +1887,8 @@ module.exports = {
   showCartComparison,
   showCartResult,
   waitForKey,
+  buildSummary,
+  calcShipping,
+  showDynamicOptimizer,
   shutdown,
 };

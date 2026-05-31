@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Select-String -Path \"c:\\\\Users\\\\jape1\\\\Desktop\\\\Git\\\\pokescraper\\\\docs\\\\direct_sellers_example.json\" -Pattern '\"Direct\"[^V]')",
+      "Bash(Measure-Object)",
+      "Bash(Select-Object -ExpandProperty Count)"
+    ]
+  }
+}
