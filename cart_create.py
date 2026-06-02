@@ -137,25 +137,12 @@ def create_cart(optimized_cart, progress_callback=None):
         }])
 
         failed_items = []
-        browser_fetch_js = """
-        async (args) => {
-            const r = await fetch(args.url, {
-                method: 'POST',
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json, text/plain, */*'
-                },
-                body: JSON.stringify(args.payload)
-            });
-            return { ok: r.ok, status: r.status, text: await r.text() };
-        }
-        """
-
         total = len(optimized_cart)
-        for done_count, item in enumerate(optimized_cart, start=1):
+
+        # Separate items with no listing (instant fail) from those needing a request.
+        requests_to_make = []
+        for item in optimized_cart:
             sku = item.get("sku")
-            seller_key = item.get("sellerKey")
             custom_listing_key = item.get("custom_listing_key")
             card_name = item.get("card", "unknown card")
             price = item.get("price", 0)
@@ -166,8 +153,6 @@ def create_cart(optimized_cart, progress_callback=None):
                     "sku": None,
                     "reason": "No listing found during optimization",
                 })
-                if progress_callback:
-                    progress_callback(done_count, total, card_name)
                 continue
 
             if custom_listing_key and custom_listing_key not in ("No Picture Linked", "N/A"):
@@ -189,7 +174,7 @@ def create_cart(optimized_cart, progress_callback=None):
                 )
                 payload = {
                     "sku": sku,
-                    "sellerKey": seller_key,
+                    "sellerKey": item.get("sellerKey"),
                     "channelId": 0,
                     "requestedQuantity": 1,
                     "price": price,
@@ -197,25 +182,57 @@ def create_cart(optimized_cart, progress_callback=None):
                     "countryCode": "US",
                 }
 
-            try:
-                result = page.evaluate(browser_fetch_js, {"url": add_url, "payload": payload})
-                if not result["ok"]:
-                    _log(f"Failed to add {card_name}: HTTP {result['status']}")
-                    failed_items.append({
-                        "card": card_name,
-                        "sku": sku,
-                        "reason": f"HTTP {result['status']} (dead listing or out of stock)",
-                    })
-            except Exception as e:
-                _log(f"Error adding {card_name}: {e}")
-                failed_items.append({
-                    "card": card_name,
-                    "sku": sku,
-                    "reason": f"Script error: {e}",
-                })
+            requests_to_make.append({
+                "url": add_url,
+                "payload": payload,
+                "card": card_name,
+                "sku": sku,
+            })
 
-            if progress_callback:
-                progress_callback(done_count, total, card_name)
+        # Fire all add-to-cart requests in parallel via Promise.allSettled.
+        if requests_to_make:
+            batch_js = """
+            async (items) => {
+                const results = await Promise.allSettled(
+                    items.map(item =>
+                        fetch(item.url, {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json, text/plain, */*'
+                            },
+                            body: JSON.stringify(item.payload)
+                        }).then(async r => ({
+                            ok: r.ok,
+                            status: r.status,
+                            card: item.card,
+                            sku: item.sku,
+                        }))
+                    )
+                );
+                return results.map((r, i) =>
+                    r.status === 'fulfilled'
+                        ? r.value
+                        : { ok: false, status: 0, card: items[i].card, sku: items[i].sku, error: String(r.reason) }
+                );
+            }
+            """
+            try:
+                results = page.evaluate(batch_js, requests_to_make)
+            except Exception as e:
+                _log(f"Batch add failed: {e}")
+                results = [{"ok": False, "status": 0, "card": r["card"], "sku": r["sku"], "error": str(e)} for r in requests_to_make]
+
+            for i, result in enumerate(results):
+                card_name = result["card"]
+                sku = result["sku"]
+                if not result["ok"]:
+                    reason = result.get("error") or f"HTTP {result['status']} (dead listing or out of stock)"
+                    _log(f"Failed to add {card_name}: {reason}")
+                    failed_items.append({"card": card_name, "sku": sku, "reason": reason})
+                if progress_callback:
+                    progress_callback(len(failed_items) + (i + 1), total, card_name)
 
         if failed_items:
             _log(f"{len(failed_items)} item(s) could not be added automatically.")

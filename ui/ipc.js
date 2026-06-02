@@ -57,6 +57,8 @@ function spawnBackend() {
     stderrBuf = lines.pop();
     for (const line of lines) {
       if (!line.trim()) continue;
+      // Drop Playwright/Chromium internal noise (e.g. "node: 75517")
+      if (/^node: \d+$/.test(line.trim())) continue;
       const handlers = listeners.get('backend_log') || [];
       handlers.forEach(h => h({ type: 'backend_log', text: line }));
     }

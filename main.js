@@ -55,13 +55,16 @@ process.on('uncaughtException', err => {
 
 async function run() {
   // ── card selection helper (Save / Load / Restart / Home support) ──────────
-  async function runCardSelection(allCardNames, promptText, setNameForFile) {
+  async function runCardSelection(allCardNames, promptText, setNameForFile, opts = {}) {
     const sanitized = setNameForFile.replace(/[^a-z0-9]/gi, '_');
     const defaultFile = `${sanitized}_cards.txt`;
     let initial = [];
 
     while (true) {
-      const result = await ui.showMultiSelect(allCardNames, promptText, { initialSelected: initial });
+      const result = await ui.showMultiSelect(allCardNames, promptText, {
+        initialSelected: initial,
+        itemMeta: opts.itemMeta,
+      });
 
       if (result.action === 'confirm') {
         return { action: 'done', selected: result.selected };
@@ -199,8 +202,9 @@ async function run() {
           continue;
         }
 
+        const itemMeta  = cardNames.map(name => cardData[name]);
         const selResult = await runCardSelection(
-          cardNames, `Select cards from ${setName}`, setName
+          cardNames, `Select cards from ${setName}`, setName, { itemMeta }
         );
         if (selResult.action === 'home')    return;
         if (selResult.action === 'restart') continue;
@@ -233,7 +237,8 @@ async function run() {
       // ── fetch all listings ──────────────────────────────────────────
       const tasks = pendingSelections.flatMap(sel =>
         sel.cardNames.map((name, i) => ({
-          productId:   sel.cardIds[i],
+          productId:   sel.cardIds[i].productId,
+          printing:    sel.cardIds[i].printing,
           displayName: `${name} [${sel.setName}]`,
         }))
       );

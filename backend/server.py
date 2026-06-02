@@ -246,9 +246,33 @@ def handle_fetch_cards(params):
             return []
         data = r.json()
         results = data.get("result", data.get("results", data)) if isinstance(data, dict) else data
-    out = {}
+
+    # Collect printings per productID so we can detect multi-printing products.
+    pid_to_info = {}
     for item in results:
-        out[item.get("productName")] = item.get("productID")
+        name = item.get("productName") or ""
+        if name.startswith("Code Card"):
+            continue
+        pid      = item.get("productID")
+        printing = item.get("printing") or None
+        number   = item.get("number") or None
+        if pid not in pid_to_info:
+            pid_to_info[pid] = {"name": name, "printings": set(), "number": number}
+        if printing:
+            pid_to_info[pid]["printings"].add(printing)
+
+    # When a single productID covers multiple printings, expose each printing as
+    # its own selectable entry so users can request a specific variant.
+    out = {}
+    for pid, info in pid_to_info.items():
+        name      = info["name"]
+        printings = info["printings"]
+        number    = info["number"]
+        if len(printings) > 1:
+            for printing in sorted(printings):
+                out[f"{name} ({printing})"] = {"productId": pid, "printing": printing, "number": number}
+        else:
+            out[name] = {"productId": pid, "printing": next(iter(printings), None), "number": number}
     return out
 
 
@@ -256,7 +280,7 @@ _MAX_RETRIES = 4
 _RETRY_BACKOFF = [2, 5, 10, 20]  # seconds between attempts
 
 
-def _fetch_one(product_id, page_cb=None):
+def _fetch_one(product_id, printing=None, page_cb=None):
     """Fetch ALL listings for a product, paginating until exhausted.
 
     page_cb(count) is called after each full page (count = total fetched so far).
@@ -270,9 +294,12 @@ def _fetch_one(product_id, page_cb=None):
     session = requests.Session()
     try:
         while True:
+            term_filter = {"sellerStatus": "Live", "channelId": 0}
+            if printing:
+                term_filter["printing"] = [printing]
             payload = {
                 "filters": {
-                    "term": {"sellerStatus": "Live", "channelId": 0},
+                    "term": term_filter,
                     "range": {"quantity": {"gte": 1}},
                     "exclude": {"channelExclusion": 0},
                 },
@@ -412,7 +439,7 @@ def handle_fetch_listings(params):
     global _cached_card_data
 
     tasks = params["tasks"]
-    max_workers = min(8, len(tasks))
+    max_workers = min(16, len(tasks))
 
     all_card_data = {}
     total = len(tasks)
@@ -425,7 +452,7 @@ def handle_fetch_listings(params):
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_map = {
-            ex.submit(_fetch_one, t["productId"], _make_page_cb(t["displayName"])): t
+            ex.submit(_fetch_one, t["productId"], t.get("printing"), _make_page_cb(t["displayName"])): t
             for t in tasks
         }
         for future in as_completed(future_map):

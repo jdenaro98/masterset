@@ -658,13 +658,61 @@ function showMultiSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
     logBox.hide();
+    const itemMeta   = opts.itemMeta || null;
+    const hasNumbers = !!(itemMeta && itemMeta.some(m => m && m.number));
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  SPACE: toggle   ENTER: confirm   S: save   L: load   R: restart   Q: quit', 1, '#888888');
+    hintWidget(
+      '  SPACE: toggle   ENTER: confirm   S: save   L: load   I: invert' +
+      (hasNumbers ? '   Z: sort' : '') +
+      '   R: restart   Q: quit',
+      1, '#888888'
+    );
 
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
     const selected = new Set();
     let undoPrev = null;
+
+    let sortMode = hasNumbers ? 'number' : 'alpha';
+
+    function cardNumSortKey(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      if (!meta || !meta.number) return Infinity;
+      const n = parseInt(meta.number.split('/')[0].trim(), 10);
+      return isNaN(n) ? Infinity : n;
+    }
+
+    function printingOrder(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      const p = meta && meta.printing;
+      return (!p || p === 'Normal') ? 0 : 1;
+    }
+
+    function buildSortedOrder() {
+      const indices = items.map((_, i) => i);
+      if (sortMode === 'number') {
+        indices.sort((a, b) => {
+          const na = cardNumSortKey(a), nb = cardNumSortKey(b);
+          if (na !== nb) return na - nb;
+          const pa = printingOrder(a), pb = printingOrder(b);
+          if (pa !== pb) return pa - pb;
+          return items[a].localeCompare(items[b]);
+        });
+      } else {
+        indices.sort((a, b) => items[a].localeCompare(items[b]));
+      }
+      return indices;
+    }
+
+    function formatCardNum(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      if (!meta || !meta.number) return '';
+      const part = meta.number.split('/')[0].trim();
+      const n = parseInt(part, 10);
+      return isNaN(n) ? part : String(n);
+    }
+
+    let sortedOrder = buildSortedOrder();
 
     const actionBar = blessed.text({
       parent: outerBox,
@@ -677,10 +725,15 @@ function showMultiSelect(items, promptText, opts = {}) {
 
     function renderActionBar() {
       const undoColor = undoPrev !== null ? PRIMARY : '#555555';
+      const sortBtn   = hasNumbers
+        ? `   {${SECONDARY}-fg}[ Z ] ${sortMode === 'number' ? 'A/Z' : '#n'}{/}`
+        : '';
       actionBar.setContent(
         `  {${SECONDARY}-fg}[ A ] Select All{/}   ` +
         `{${SECONDARY}-fg}[ D ] Deselect All{/}   ` +
-        `{${undoColor}-fg}[ U ] Undo{/}`
+        `{${SECONDARY}-fg}[ I ] Invert{/}   ` +
+        `{${undoColor}-fg}[ U ] Undo{/}` +
+        sortBtn
       );
       screen.render();
     }
@@ -721,18 +774,23 @@ function showMultiSelect(items, promptText, opts = {}) {
       for (let r = 0; r < rows; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx   = c * rows + r;
-          if (idx >= items.length) {
+          const displayIdx = c * rows + r;
+          if (displayIdx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
           }
-          const name   = items[idx];
-          const isCur  = (r === curRow && c === curCol);
-          const isSel  = selected.has(idx);
-          const prefix = isSel ? '[x] ' : '[ ] ';
-          const cell   = name.length > maxText
-            ? name.substring(0, maxText - 1) + '…'
-            : name.padEnd(maxText);
+          const origIdx = sortedOrder[displayIdx];
+          const isCur   = (r === curRow && c === curCol);
+          const isSel   = selected.has(origIdx);
+          const prefix  = isSel ? '[x] ' : '[ ] ';
+          let label     = items[origIdx];
+          if (sortMode === 'number') {
+            const numStr = formatCardNum(origIdx);
+            if (numStr) label = `${numStr}  ${label}`;
+          }
+          const cell = label.length > maxText
+            ? label.substring(0, maxText - 1) + '…'
+            : label.padEnd(maxText);
           const text = escape(prefix + cell);
           if (isCur) {
             line += `{#ffffff-bg}{#000000-fg} ${text} {/}`;
@@ -775,9 +833,10 @@ function showMultiSelect(items, promptText, opts = {}) {
       clampCol(); render();
     });
     gridBox.key('space', () => {
-      const idx = curCol * rows + curRow;
-      if (idx < items.length) {
-        selected.has(idx) ? selected.delete(idx) : selected.add(idx);
+      const displayIdx = curCol * rows + curRow;
+      if (displayIdx < items.length) {
+        const origIdx = sortedOrder[displayIdx];
+        selected.has(origIdx) ? selected.delete(origIdx) : selected.add(origIdx);
         render();
       }
     });
@@ -810,11 +869,37 @@ function showMultiSelect(items, promptText, opts = {}) {
       renderActionBar();
       render();
     });
+    gridBox.key(['i', 'I'], () => {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) {
+        selected.has(i) ? selected.delete(i) : selected.add(i);
+      }
+      renderActionBar();
+      render();
+    });
     gridBox.key(['u', 'U'], () => {
       if (undoPrev === null) return;
       selected.clear();
       for (const idx of undoPrev) selected.add(idx);
       undoPrev = null;
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['z', 'Z'], () => {
+      if (!hasNumbers) return;
+      // Remember which card the cursor is on so we can restore its position.
+      const currentDisplayIdx = curCol * rows + curRow;
+      const currentOrigIdx = currentDisplayIdx < sortedOrder.length
+        ? sortedOrder[currentDisplayIdx] : null;
+      sortMode    = sortMode === 'number' ? 'alpha' : 'number';
+      sortedOrder = buildSortedOrder();
+      if (currentOrigIdx !== null) {
+        const newDisplayIdx = sortedOrder.indexOf(currentOrigIdx);
+        if (newDisplayIdx >= 0) {
+          curRow = newDisplayIdx % rows;
+          curCol = Math.floor(newDisplayIdx / rows);
+        }
+      }
       renderActionBar();
       render();
     });
