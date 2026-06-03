@@ -1,48 +1,7 @@
 'use strict';
 
-const { execSync, spawn } = require('child_process');
-const path  = require('path');
-const fs    = require('fs');
-
-// ── launcher: open a new terminal window ──────────────────────────────────
-
-if (!process.env.TCGSCRAPER_BORDERED) {
-  const script = __filename;
-
-  if (process.platform === 'win32') {
-    try {
-      execSync('where wt.exe', { stdio: 'ignore' });
-      spawn('wt.exe', ['--size', '50x160', '--title', 'TCGScraper', '--', 'node', script], {
-        env:      { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
-        detached: true,
-        stdio:    'ignore',
-      }).unref();
-    } catch {
-      const batPath = path.join(require('os').tmpdir(), 'tcgscraper_launch.bat');
-      fs.writeFileSync(batPath,
-        `@echo off\r\nmode con: cols=160 lines=50\r\ntitle TCGScraper\r\nnode "${script}"\r\n`, 'utf8');
-      spawn('cmd.exe', ['/c', batPath], {
-        env:         { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
-        detached:    true,
-        stdio:       'ignore',
-        windowsHide: false,
-      }).unref();
-    }
-  } else {
-    const tmp = path.join(require('os').tmpdir(), 'tcgscraper_launch.sh');
-    fs.writeFileSync(tmp,
-      `#!/bin/bash\nexport TCGSCRAPER_BORDERED=1\nnode "${script}"\nosascript -e 'tell application "Terminal" to close front window' 2>/dev/null || true\n`, 'utf8');
-    fs.chmodSync(tmp, 0o755);
-    spawn('osascript', [
-      '-e', `tell application "Terminal" to do script "${tmp}"`,
-      '-e', 'tell application "Terminal" to activate',
-    ], { detached: true, stdio: 'ignore' }).unref();
-  }
-
-  process.exit(0);
-}
-
-// ── bordered mode: run the full TUI app ────────────────────────────────────
+const path = require('path');
+const fs   = require('fs');
 
 const ipc = require('./ui/ipc');
 const ui  = require('./ui/app');

@@ -2,11 +2,47 @@
   "name": "tcgscraper",
   "version": "1.0.0",
   "description": "TCGPlayer scraper with blessed TUI",
-  "main": "main.js",
+  "main": "electron-main.js",
   "scripts": {
-    "start": "node main.js"
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
   },
   "dependencies": {
-    "blessed": "^0.1.81"
+    "blessed":          "^0.1.81",
+    "electron":         "^34.0.0",
+    "node-pty":         "^1.0.0",
+    "xterm":            "^5.3.0",
+    "xterm-addon-fit":  "^0.10.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^25.1.0"
+  },
+  "build": {
+    "appId":       "com.tcgscraper.app",
+    "productName": "TCGScraper",
+    "npmRebuild":  true,
+    "files": [
+      "electron-main.js",
+      "main.js",
+      "ui/**",
+      "backend/**",
+      "renderer/**",
+      "art/**",
+      "node_modules/**",
+      "!node_modules/.cache/**",
+      "!venv/**",
+      "!debug/**",
+      "!test_cases/**",
+      "!**/__pycache__/**",
+      "!**/*.pyc"
+    ],
+    "mac": {
+      "target":   "dmg",
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }

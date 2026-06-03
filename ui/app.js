@@ -27,11 +27,6 @@ function desaturate([r, g, b], factor) {
 }
 
 function initScreen() {
-  // Request a comfortable window size via VT sequence (Windows Terminal + xterm-compatible).
-  // By the time runSplash is called (after async IPC), the terminal will have resized
-  // and blessed will have received SIGWINCH with the updated dimensions.
-  process.stdout.write('\x1b[8;50;160t');
-
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
