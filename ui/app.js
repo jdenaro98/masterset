@@ -662,7 +662,7 @@ function showMultiSelect(items, promptText, opts = {}) {
     const hasNumbers = !!(itemMeta && itemMeta.some(m => m && m.number));
     hintWidget(promptText, 0, '#cccccc');
     hintWidget(
-      '  SPACE: toggle   ENTER: confirm   S: save   L: load   I: invert' +
+      '  SPACE: toggle   ENTER: confirm   PgUp/PgDn: scroll   S: save   L: load   I: invert' +
       (hasNumbers ? '   Z: sort' : '') +
       '   R: restart   Q: quit',
       1, '#888888'
@@ -746,7 +746,19 @@ function showMultiSelect(items, promptText, opts = {}) {
     }
 
     let curRow = 0, curCol = 0;
+    let scrollTop = 0;
     const km = makeKeyManager();
+
+    // outerBox border=2, hints rows 0-1, actionBar row 2, gridBox top=3, bottom=2
+    function getVisH() {
+      return Math.max(1, (screen.rows || screen.height || 50) - 7);
+    }
+
+    function ensureCursorVisible() {
+      const visH = getVisH();
+      if (curRow < scrollTop) scrollTop = curRow;
+      else if (curRow >= scrollTop + visH) scrollTop = curRow - visH + 1;
+    }
 
     function cleanupAndResolve(value) {
       km.cleanup();
@@ -756,22 +768,35 @@ function showMultiSelect(items, promptText, opts = {}) {
     }
 
     const gridBox = blessed.box({
-      parent:       outerBox,
+      parent: outerBox,
       top: 3, left: 1, right: 1, bottom: 2,
-      scrollable:   true,
-      alwaysScroll: true,
-      keys:         true,
-      tags:         true,
-      scrollbar: { ch: '│', style: { fg: PRIMARY } },
+      keys:   true,
+      mouse:  true,
+      tags:   true,
     });
 
+    // scroll position indicator shown when content overflows
+    const scrollIndicator = blessed.text({
+      parent:  outerBox,
+      bottom:  2, right: 2,
+      height:  1,
+      content: '',
+      style:   { fg: '#555555' },
+      tags:    false,
+    });
+    activeHints.push(scrollIndicator);
+
     function render() {
+      const visH     = getVisH();
       const w        = Math.max(30, (screen.width || 120) - 6);
       const colWidth = Math.floor(w / COLS);
       const maxText  = Math.max(4, colWidth - 6);
       const lines    = [];
 
-      for (let r = 0; r < rows; r++) {
+      const startRow = scrollTop;
+      const endRow   = Math.min(rows, scrollTop + visH);
+
+      for (let r = startRow; r < endRow; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
           const displayIdx = c * rows + r;
@@ -804,10 +829,11 @@ function showMultiSelect(items, promptText, opts = {}) {
       }
       gridBox.setContent(lines.join('\n'));
 
-      const visH = Math.max(1, gridBox.height);
-      const base = gridBox.childBase || 0;
-      if (curRow >= base + visH) gridBox.scrollTo(curRow - visH + 1);
-      else if (curRow < base)    gridBox.scrollTo(curRow);
+      if (rows > visH) {
+        scrollIndicator.setContent(`${startRow + 1}-${endRow} of ${rows}`);
+      } else {
+        scrollIndicator.setContent('');
+      }
 
       screen.render();
     }
@@ -817,20 +843,42 @@ function showMultiSelect(items, promptText, opts = {}) {
       if (curCol > maxCol) curCol = maxCol;
     }
 
-    gridBox.key('up',       () => { if (curRow > 0) { curRow--; clampCol(); render(); } });
-    gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
-    gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
-    gridBox.key('right',    () => {
+    gridBox.key('up', () => {
+      if (curRow > 0) { curRow--; clampCol(); ensureCursorVisible(); render(); }
+    });
+    gridBox.key('down', () => {
+      if (curRow < rows - 1) { curRow++; clampCol(); ensureCursorVisible(); render(); }
+    });
+    gridBox.key('left',  () => { if (curCol > 0) { curCol--; render(); } });
+    gridBox.key('right', () => {
       const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
-    gridBox.key('pageup',   () => {
-      curRow = Math.max(0, curRow - Math.max(1, gridBox.height));
+    gridBox.key('pageup', () => {
+      const visH = getVisH();
+      scrollTop = Math.max(0, scrollTop - visH);
+      curRow    = scrollTop;
       clampCol(); render();
     });
     gridBox.key('pagedown', () => {
-      curRow = Math.min(rows - 1, curRow + Math.max(1, gridBox.height));
+      const visH     = getVisH();
+      const maxScroll = Math.max(0, rows - visH);
+      scrollTop = Math.min(maxScroll, scrollTop + visH);
+      curRow    = Math.min(rows - 1, scrollTop + visH - 1);
       clampCol(); render();
+    });
+    gridBox.on('wheelup', () => {
+      const visH = getVisH();
+      scrollTop = Math.max(0, scrollTop - 3);
+      if (curRow >= scrollTop + visH) { curRow = scrollTop + visH - 1; clampCol(); }
+      render();
+    });
+    gridBox.on('wheeldown', () => {
+      const visH      = getVisH();
+      const maxScroll = Math.max(0, rows - visH);
+      scrollTop = Math.min(maxScroll, scrollTop + 3);
+      if (curRow < scrollTop) { curRow = scrollTop; clampCol(); }
+      render();
     });
     gridBox.key('space', () => {
       const displayIdx = curCol * rows + curRow;
@@ -900,6 +948,7 @@ function showMultiSelect(items, promptText, opts = {}) {
           curCol = Math.floor(newDisplayIdx / rows);
         }
       }
+      ensureCursorVisible();
       renderActionBar();
       render();
     });
@@ -919,7 +968,7 @@ function showAutocomplete(choices, promptText) {
     sectionClear();
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
+    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
     let destroyed = false;
@@ -950,11 +999,12 @@ function showAutocomplete(choices, promptText) {
       mouse:        true,
       scrollable:   true,
       alwaysScroll: true,
-      scrollbar: { ch: '│' },
+      scrollbar: { ch: '│', track: { ch: ' ' } },
       items: filtered,
       style: {
         selected: { bg: '#ffffff', fg: '#000000', bold: true },
         item:     { fg: SECONDARY },
+        scrollbar: { fg: PRIMARY, inverse: true },
       },
       tags: false,
     });
@@ -1010,6 +1060,17 @@ function showAutocomplete(choices, promptText) {
 
     inputBox.key('down', () => dropList.focus());
 
+    inputBox.key('pageup', () => {
+      dropList.scroll(-Math.max(1, dropList.height));
+      screen.render();
+      inputBox.focus();
+    });
+    inputBox.key('pagedown', () => {
+      dropList.scroll(Math.max(1, dropList.height));
+      screen.render();
+      inputBox.focus();
+    });
+
     inputBox.key(['enter', 'return'], () => {
       if (filtered.length === 0) { flashInvalidInput(); return; }
       cleanupAndResolve(filtered[dropList.selected] ?? null);
@@ -1023,6 +1084,8 @@ function showAutocomplete(choices, promptText) {
     dropList.key('up', () => {
       if (dropList.selected === 0) inputBox.focus();
     });
+    dropList.key('pageup',   () => { dropList.scroll(-Math.max(1, dropList.height)); screen.render(); });
+    dropList.key('pagedown', () => { dropList.scroll(Math.max(1, dropList.height));  screen.render(); });
 
     km.add('escape', () => cleanupAndResolve(null));
 
@@ -1638,9 +1701,9 @@ function buildSummary(cart) {
 
 // ── dynamic optimizer screen ──────────────────────────────────────────────
 //
-// Three selectable cart summaries across the top (First Listing, Default
-// Optimized, Your Cart), with Condition and Seller Qualification filter
-// panels below that live-update Column 3 on every toggle.
+// Two selectable cart summaries across the top (First Listing, Dynamic
+// Optimized), with Condition and Seller Qualification filter panels below
+// that live-update Column 2 on every toggle.
 //
 // Returns Promise<{ action: 'confirm'|'restart'|'home', cart: [...] }>
 
@@ -1653,7 +1716,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // ── state ──────────────────────────────────────────────────────────
     let zone         = 0;   // 0 = top (carts)   1 = bottom (filters)
-    let selectedCart = 1;   // 0 = first   1 = default   2 = user
+    let selectedCart = 1;   // 0 = first   1 = dynamic
     let filterCol    = 0;   // 0 = conditions   1 = sellerQuals
     const filterRows = [0, 0];
 
@@ -1667,7 +1730,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // Default checked state mirrors Column 2's optimization criteria
     const defaultConds = defaultFilters.conditions || ['Near Mint', 'Lightly Played'];
-    const defaultQuals = defaultFilters.quals || ['Verified'];
+    const defaultQuals = defaultFilters.quals || [];
     const condChecked = new Set(defaultConds.filter(c => CONDITIONS.includes(c)));
     const qualChecked = new Set(defaultQuals.filter(q => QUALS.includes(q)));
 
@@ -1681,13 +1744,12 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     const summaries = [
       buildSummary(firstCart),
-      buildSummary(defaultCart),
       buildSummary(userCart),
     ];
 
     // ── layout ─────────────────────────────────────────────────────────
     const CART_TOP   = 2;
-    const CART_H     = 7;
+    const CART_H     = 9;
     const FILTER_TOP = CART_TOP + CART_H + 2;
     const FILTER_H   = 10;
     const NOTICE_TOP = FILTER_TOP + FILTER_H;
@@ -1711,15 +1773,15 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
     activeHints.push(hintWidget);
 
-    // ── 3 cart boxes ───────────────────────────────────────────────────
-    const CART_TITLES = ['FIRST LISTING', 'DEFAULT OPTIMIZED', 'YOUR CART'];
-    const cartBoxes = [0, 1, 2].map(i => {
+    // ── 2 cart boxes ───────────────────────────────────────────────────
+    const CART_TITLES = ['FIRST LISTING', 'DYNAMIC OPTIMIZED'];
+    const cartBoxes = [0, 1].map(i => {
       const box = blessed.box({
         parent: outerBox,
         top:    CART_TOP,
-        left:   `${Math.round(i * 33.33)}%`,
-        width:  i < 2 ? '33%' : undefined,
-        right:  i === 2 ? 1 : undefined,
+        left:   i === 0 ? 0 : '50%',
+        width:  i === 0 ? '50%' : undefined,
+        right:  i === 1 ? 1 : undefined,
         height: CART_H,
         border: { type: 'line' },
         style:  { border: { fg: '#333333' }, bg: '#000000' },
@@ -1788,7 +1850,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       if (spinnerTimer) clearInterval(spinnerTimer);
       spinnerTimer = setInterval(() => {
         spinnerFrame = (spinnerFrame + 1) % SPINNER.length;
-        renderCartBox(2);
+        renderCartBox(1);
       }, 80);
     }
 
@@ -1809,13 +1871,14 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
           });
           userCart         = result.cart;
           currentOverrides = result.overrides || [];
-          summaries[2]     = buildSummary(userCart);
+          summaries[1]     = buildSummary(userCart);
         } catch (_) {
           // keep previous result on error
         } finally {
           isCalc = false;
           stopSpinner();
-          renderCartBox(2);
+          renderCartBox(0);
+          renderCartBox(1);
           renderNotice();
         }
       }, 300);
@@ -1827,25 +1890,59 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       const isSelected = selectedCart === i;
       const isTopZone  = zone === 0;
 
+      // Cheapest indicator: independent of selection/tab state; suppressed during recalc
+      const cheapestIdx = (!isCalc && summaries[0].total !== summaries[1].total)
+        ? (summaries[0].total < summaries[1].total ? 0 : 1)
+        : -1;
+      const isCheapest = cheapestIdx === i;
+
+      // Border stays purely selection/navigation driven
       box.style.border.fg = (isTopZone && isSelected) ? PRIMARY : '#333333';
 
-      if (i === 2 && isCalc) {
-        const sp = SPINNER[spinnerFrame];
-        box.setContent(
-          `{bold}{${SECONDARY}-fg}${escape(CART_TITLES[i])}{/}\n\n` +
-          `{${PRIMARY}-fg}  ${sp} Recalculating…{/}`
-        );
+      // Inner border uses fg chars — reliable across all terminals.
+      // CART_H=9 gives 7 interior rows: top bar + 5 content + bottom bar.
+      // Non-cheapest boxes use empty top/bottom rows so layouts stay aligned.
+      const CHEAP_GREEN = '#88cc88';
+      const innerW = Math.max(4, ((typeof box.width === 'number' ? box.width : 60) - 2));
+      const bar = isCheapest ? `{${CHEAP_GREEN}-fg}${'─'.repeat(innerW)}{/}` : '';
+
+      // Wraps a content line with │ side bars, padding to fill the full width.
+      // For non-cheapest boxes returns the styled text unchanged.
+      function wrapLine(plainText, styledText) {
+        if (!isCheapest) return styledText;
+        const padLen = Math.max(0, innerW - 4 - plainText.length);
+        return `{${CHEAP_GREEN}-fg}│{/} ${styledText}${' '.repeat(padLen)} {${CHEAP_GREEN}-fg}│{/}`;
+      }
+
+      if (i === 1 && isCalc) {
+        const sp      = SPINNER[spinnerFrame];
+        const titleStr = escape(CART_TITLES[i]);
+        const spinStr  = `  ${sp} Recalculating…`;
+        box.setContent([
+          bar,
+          wrapLine(titleStr,  `{bold}{${SECONDARY}-fg}${titleStr}{/}`),
+          wrapLine('', ''),
+          wrapLine(spinStr,   `{${PRIMARY}-fg}${spinStr}{/}`),
+          wrapLine('', ''), wrapLine('', ''),
+          bar,
+        ].join('\n'));
       } else {
-        const s     = summaries[i];
-        const color = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
-        box.setContent(
-          `{bold}{${color}-fg}${escape(CART_TITLES[i])}{/}\n` +
-          `{${color}-fg}` +
-          `  Sellers:  ${s.sellers}\n` +
-          `  Cards:    $${s.rawCost.toFixed(2)}\n` +
-          `  Shipping: $${s.shipping.toFixed(2)}\n` +
-          `  Total:    $${s.total.toFixed(2)}{/}`
-        );
+        const s        = summaries[i];
+        const color    = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
+        const titleStr  = escape(CART_TITLES[i]);
+        const sellers   = `  Sellers:  ${s.sellers}`;
+        const cards     = `  Cards:    $${s.rawCost.toFixed(2)}`;
+        const shipping  = `  Shipping: $${s.shipping.toFixed(2)}`;
+        const total     = `  Total:    $${s.total.toFixed(2)}`;
+        box.setContent([
+          bar,
+          wrapLine(titleStr, `{bold}{${color}-fg}${titleStr}{/}`),
+          wrapLine(sellers,  `{${color}-fg}${sellers}{/}`),
+          wrapLine(cards,    `{${color}-fg}${cards}{/}`),
+          wrapLine(shipping, `{${color}-fg}${shipping}{/}`),
+          wrapLine(total,    `{${color}-fg}${total}{/}`),
+          bar,
+        ].join('\n'));
       }
       screen.render();
     }
@@ -1900,7 +1997,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     }
 
     function renderAll() {
-      for (let i = 0; i < 3; i++) renderCartBox(i);
+      for (let i = 0; i < 2; i++) renderCartBox(i);
       for (let c = 0; c < 2; c++) renderFilterBox(c);
       renderNotice();
       renderHint();
@@ -1930,7 +2027,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     km.add('right', () => {
       if (zone === 0) {
-        if (selectedCart < 2) { selectedCart++; renderAll(); }
+        if (selectedCart < 1) { selectedCart++; renderAll(); }
       } else {
         if (filterCol < 1) { filterCol++; renderAll(); filterBoxes[filterCol].focus(); }
       }
@@ -1966,8 +2063,8 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
 
     km.add(['enter', 'return'], () => {
-      if (selectedCart === 2 && isCalc) return; // block Column 3 while calculating
-      const carts = [firstCart, defaultCart, userCart];
+      if (selectedCart === 1 && isCalc) return; // block while recalculating
+      const carts = [firstCart, userCart];
       cleanupAndResolve({
         action: 'confirm',
         cart: carts[selectedCart],

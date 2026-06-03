@@ -260,6 +260,14 @@ async function run() {
         cardPageUpdater = null;
       }
 
+      if (process.env.DEBUG_DUMP) {
+        try {
+          const dump = await ipc.call('dump_listings', {});
+          ui.muted(`Debug dump: ${dump.cards} card(s) written to ${dump.path}`);
+          await new Promise(r => setTimeout(r, 1200));
+        } catch (_) {}
+      }
+
       // ── build first-listing cart (cheapest per card, no filter) ────
       const firstListingCart = Object.values(allCardData)
         .map(data => {
@@ -285,7 +293,7 @@ async function run() {
       ui.muted('Optimising cart…');
 
       const DEFAULT_CONDITIONS = ['Near Mint', 'Lightly Played'];
-      const DEFAULT_QUALS      = ['Verified'];
+      const DEFAULT_QUALS      = [];
 
       let defaultCart, filterOptions;
       try {

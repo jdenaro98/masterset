@@ -604,6 +604,15 @@ def handle_close_browser(params):
     return {"ok": True}
 
 
+def handle_dump_listings(params):
+    """Write the cached listings to a JSON file for optimizer debugging."""
+    out_path = params.get("path") or os.path.join(os.getcwd(), "listings_debug.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(_cached_card_data, f, indent=2)
+    _log(f"listings dumped to {out_path}")
+    return {"path": out_path, "cards": len(_cached_card_data)}
+
+
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
@@ -617,6 +626,7 @@ HANDLERS = {
     "get_filter_options":  handle_get_filter_options,
     "create_cart":         handle_create_cart,
     "close_browser":       handle_close_browser,
+    "dump_listings":       handle_dump_listings,
 }
 
 # ── main loop ─────────────────────────────────────────────────────────────────
