@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000000; overflow: hidden; }
@@ -22,8 +23,8 @@
       theme: {
         background:          '#000000',
         foreground:          '#ffffff',
-        cursor:              '#ffffff',
-        cursorAccent:        '#000000',
+        cursor:              'transparent',
+        cursorAccent:        'transparent',
         selectionBackground: 'rgba(255,255,255,0.25)',
         black:        '#000000', brightBlack:   '#555555',
         red:          '#cc0000', brightRed:     '#ff5555',
@@ -36,20 +37,25 @@
       },
       fontFamily:      '"Cascadia Code", "Fira Code", "Courier New", monospace',
       fontSize:        13,
-      lineHeight:      1.2,
+      lineHeight:      1.0,
       cursorStyle:     'bar',
-      cursorBlink:     true,
-      scrollback:      1000,
+      cursorBlink:     false,
+      scrollback:      0,
       allowProposedApi: true,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(document.getElementById('terminal'));
+    term.focus();
+    window.addEventListener('focus', () => term.focus());
+
 
     // Wire up PTY I/O immediately — data can start flowing before the window resize
     ipcRenderer.on('pty-data', (_, data) => term.write(data));
     term.onData(data => ipcRenderer.send('pty-input', data));
+    // onBinary handles DEFAULT-encoded mouse events (fallback if SGR mode isn't negotiated)
+    term.onBinary(data => ipcRenderer.send('pty-input', data));
     term.onResize(({ cols, rows }) => ipcRenderer.send('pty-resize', { cols, rows }));
 
     // Wait for xterm to render at 160×50, measure its pixel footprint,

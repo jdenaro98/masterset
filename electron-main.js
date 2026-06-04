@@ -3,6 +3,17 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const pty  = require('node-pty');
 const path = require('path');
+const { execFileSync } = require('child_process');
+
+function resolveNodeBin() {
+  for (const sh of ['/bin/bash', '/bin/zsh', '/bin/sh']) {
+    try {
+      return execFileSync(sh, ['-l', '-c', 'which node'], { encoding: 'utf8' }).trim();
+    } catch {}
+  }
+  return 'node';
+}
+const NODE_BIN = resolveNodeBin();
 
 let win, ptyProcess;
 
@@ -22,12 +33,12 @@ app.whenReady().then(() => {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.webContents.on('did-finish-load', () => {
-    ptyProcess = pty.spawn('node', [path.join(__dirname, 'main.js')], {
+    ptyProcess = pty.spawn(NODE_BIN, [path.join(__dirname, 'main.js')], {
       name: 'xterm-256color',
       cols: 160,
       rows: 50,
       cwd:  __dirname,
-      env:  { ...process.env, COLORTERM: 'truecolor', TERM: 'xterm-256color' },
+      env:  { ...process.env, COLORTERM: 'truecolor', TERM: 'xterm-256color', BLESSED_FORCE_MODES: 'SGRMOUSE=1,ALLMOTION=1,VT200MOUSE=1,CELLMOTION=1' },
     });
 
     ptyProcess.onData(data => win.webContents.send('pty-data', data));

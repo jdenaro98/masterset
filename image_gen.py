@@ -7,7 +7,7 @@ from PIL import Image
 _ASCII_CHARS = "@#%S?+;:,."
 # Terminal chars are ~2x taller than wide; halving rows preserves visual aspect ratio
 _CHAR_ASPECT = 0.5
-_TARGET_WIDTH = 16
+_TARGET_WIDTH = 80
 
 def main():
     pass

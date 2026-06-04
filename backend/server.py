@@ -492,9 +492,18 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
     has_cond  = bool(conditions)
     has_qual  = bool(seller_quals)
 
+    cond_str = " / ".join(conditions) if conditions else ""
+    qual_str  = " / ".join(seller_quals) if seller_quals else ""
+
     for pid, card_data in card_data_map.items():
         raw  = card_data["market_listings"]
         name = card_data["card_info"]["name"]
+
+        # Cards with no listings at all: flag unconditionally, skip filter tiers
+        if not raw:
+            filtered_data[pid] = {**card_data, "market_listings": []}
+            overrides.append({"name": name, "applied": "no listings found"})
+            continue
 
         # Tier 1: full filter
         result = _apply_filters(raw, conditions, seller_quals)
@@ -507,7 +516,7 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
             result = _apply_filters(raw, [], seller_quals)
             if result:
                 filtered_data[pid] = {**card_data, "market_listings": result}
-                overrides.append({"name": name, "applied": "condition filter removed"})
+                overrides.append({"name": name, "applied": f"no {cond_str} listings from {qual_str} sellers"})
                 continue
 
         # Tier 3: keep condition, drop seller qual
@@ -515,12 +524,18 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
             result = _apply_filters(raw, conditions, [])
             if result:
                 filtered_data[pid] = {**card_data, "market_listings": result}
-                overrides.append({"name": name, "applied": "seller filter removed"})
+                reason = (f"no {qual_str} seller listings in {cond_str}"
+                          if has_cond else f"no {qual_str} seller listings")
+                overrides.append({"name": name, "applied": reason})
                 continue
 
         # Tier 4: no filter
         filtered_data[pid] = {**card_data, "market_listings": raw}
-        overrides.append({"name": name, "applied": "all filters removed"})
+        if has_cond and has_qual:
+            reason = f"no listings match {cond_str} or {qual_str} sellers"
+        else:
+            reason = f"no {cond_str} listings"
+        overrides.append({"name": name, "applied": reason})
 
     return filtered_data, overrides
 

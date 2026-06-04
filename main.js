@@ -206,6 +206,7 @@ async function run() {
       const progressHandlers = ui.showProgress(tasks.length);
       progressUpdater = progressHandlers.onComplete;
       cardPageUpdater = progressHandlers.onPage;
+      debugLogUpdater = progressHandlers.onDebug;
 
       let allCardData;
       try {
@@ -217,6 +218,7 @@ async function run() {
       } finally {
         progressUpdater = null;
         cardPageUpdater = null;
+        debugLogUpdater = null;
       }
 
       if (process.env.DEBUG_DUMP) {
@@ -254,14 +256,15 @@ async function run() {
       const DEFAULT_CONDITIONS = ['Near Mint', 'Lightly Played'];
       const DEFAULT_QUALS      = [];
 
-      let defaultCart, filterOptions;
+      let defaultCart, filterOptions, defaultOverrides = [];
       try {
         let defaultResult;
         [defaultResult, filterOptions] = await Promise.all([
           ipc.call('optimize_filtered', { conditions: DEFAULT_CONDITIONS, sellerQuals: DEFAULT_QUALS }),
           ipc.call('get_filter_options', {}),
         ]);
-        defaultCart = defaultResult.cart;
+        defaultCart      = defaultResult.cart;
+        defaultOverrides = defaultResult.overrides || [];
       } catch (e) {
         ui.muted(`Optimisation error: ${e.message}`);
         await new Promise(r => setTimeout(r, 2000));
@@ -271,7 +274,8 @@ async function run() {
       // ── dynamic optimizer screen ────────────────────────────────────
       const dynamicResult = await ui.showDynamicOptimizer(
         firstListingCart, defaultCart, filterOptions,
-        { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS }
+        { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS },
+        { totalCards: Object.keys(allCardData).length, initialOverrides: defaultOverrides }
       );
 
       if (dynamicResult.action === 'home')    return;
@@ -317,7 +321,7 @@ async function run() {
   // ── boot ───────────────────────────────────────────────────────────────
   ui.initScreen();
   ipc.spawnBackend();
-  ipc.on('backend_log', msg => ui.muted(msg.text));
+  ipc.on('backend_log', msg => debugLogUpdater ? debugLogUpdater(msg.text) : ui.muted(msg.text));
 
   ui.header('Loading…');
   const theme = await ipc.call('get_theme', {});
@@ -328,6 +332,7 @@ async function run() {
   let progressUpdater     = null;
   let cardPageUpdater     = null;
   let cartProgressUpdater = null;
+  let debugLogUpdater     = null;
   ipc.on('progress',           msg => progressUpdater     && progressUpdater(msg.card));
   ipc.on('card_page_progress', msg => cardPageUpdater     && cardPageUpdater(msg.card, msg.fetched));
   ipc.on('cart_progress',      msg => cartProgressUpdater && cartProgressUpdater(msg.card));
