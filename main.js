@@ -1,48 +1,7 @@
 'use strict';
 
-const { execSync, spawn } = require('child_process');
-const path  = require('path');
-const fs    = require('fs');
-
-// ── launcher: open a new terminal window ──────────────────────────────────
-
-if (!process.env.TCGSCRAPER_BORDERED) {
-  const script = __filename;
-
-  if (process.platform === 'win32') {
-    try {
-      execSync('where wt.exe', { stdio: 'ignore' });
-      spawn('wt.exe', ['--size', '50x160', '--title', 'TCGScraper', '--', 'node', script], {
-        env:      { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
-        detached: true,
-        stdio:    'ignore',
-      }).unref();
-    } catch {
-      const batPath = path.join(require('os').tmpdir(), 'tcgscraper_launch.bat');
-      fs.writeFileSync(batPath,
-        `@echo off\r\nmode con: cols=160 lines=50\r\ntitle TCGScraper\r\nnode "${script}"\r\n`, 'utf8');
-      spawn('cmd.exe', ['/c', batPath], {
-        env:         { ...process.env, TCGSCRAPER_BORDERED: '1', COLORTERM: 'truecolor', TERM: 'xterm-256color' },
-        detached:    true,
-        stdio:       'ignore',
-        windowsHide: false,
-      }).unref();
-    }
-  } else {
-    const tmp = path.join(require('os').tmpdir(), 'tcgscraper_launch.sh');
-    fs.writeFileSync(tmp,
-      `#!/bin/bash\nexport TCGSCRAPER_BORDERED=1\nnode "${script}"\nosascript -e 'tell application "Terminal" to close front window' 2>/dev/null || true\n`, 'utf8');
-    fs.chmodSync(tmp, 0o755);
-    spawn('osascript', [
-      '-e', `tell application "Terminal" to do script "${tmp}"`,
-      '-e', 'tell application "Terminal" to activate',
-    ], { detached: true, stdio: 'ignore' }).unref();
-  }
-
-  process.exit(0);
-}
-
-// ── bordered mode: run the full TUI app ────────────────────────────────────
+const path = require('path');
+const fs   = require('fs');
 
 const ipc = require('./ui/ipc');
 const ui  = require('./ui/app');
@@ -55,13 +14,16 @@ process.on('uncaughtException', err => {
 
 async function run() {
   // ── card selection helper (Save / Load / Restart / Home support) ──────────
-  async function runCardSelection(allCardNames, promptText, setNameForFile) {
+  async function runCardSelection(allCardNames, promptText, setNameForFile, opts = {}) {
     const sanitized = setNameForFile.replace(/[^a-z0-9]/gi, '_');
     const defaultFile = `${sanitized}_cards.txt`;
     let initial = [];
 
     while (true) {
-      const result = await ui.showMultiSelect(allCardNames, promptText, { initialSelected: initial });
+      const result = await ui.showMultiSelect(allCardNames, promptText, {
+        initialSelected: initial,
+        itemMeta: opts.itemMeta,
+      });
 
       if (result.action === 'confirm') {
         return { action: 'done', selected: result.selected };
@@ -199,52 +161,14 @@ async function run() {
           continue;
         }
 
-        ui.sectionClear();
-        const scrapeOpts = [
-          '1. Inclusive – pick specific cards',
-          '2. Exclusive – whole set minus a few',
-          '3. All Cards',
-        ];
-        const scrapeChoice = await ui.showGridSelect(
-          scrapeOpts,
-          `Set: ${setName} — How would you like to scrape?`,
-          { cols: 1 }
+        const itemMeta  = cardNames.map(name => cardData[name]);
+        const selResult = await runCardSelection(
+          cardNames, `Select cards from ${setName}`, setName, { itemMeta }
         );
-        if (!scrapeChoice) continue;
-
-        let selectedCardNames = [];
-        let selectedCardIds   = [];
-        let cardSelRestart    = false;
-
-        if (scrapeChoice === scrapeOpts[0]) {
-          const selResult = await runCardSelection(
-            cardNames, `Select cards to INCLUDE from ${setName}`, setName
-          );
-          if (selResult.action === 'home')    return;
-          if (selResult.action === 'restart') { cardSelRestart = true; }
-          else {
-            selectedCardNames = selResult.selected;
-            selectedCardIds   = selectedCardNames.map(n => cardData[n]);
-          }
-
-        } else if (scrapeChoice === scrapeOpts[1]) {
-          const selResult = await runCardSelection(
-            cardNames, `Select cards to EXCLUDE from ${setName}`, setName
-          );
-          if (selResult.action === 'home')    return;
-          if (selResult.action === 'restart') { cardSelRestart = true; }
-          else {
-            const excSet = new Set(selResult.selected);
-            selectedCardNames = cardNames.filter(n => !excSet.has(n));
-            selectedCardIds   = selectedCardNames.map(n => cardData[n]);
-          }
-
-        } else {
-          selectedCardNames = [...cardNames];
-          selectedCardIds   = [...cardIds];
-        }
-
-        if (cardSelRestart) continue;
+        if (selResult.action === 'home')    return;
+        if (selResult.action === 'restart') continue;
+        const selectedCardNames = selResult.selected;
+        const selectedCardIds   = selectedCardNames.map(n => cardData[n]);
 
         if (!selectedCardNames.length) {
           ui.muted('No cards selected.');
@@ -272,7 +196,8 @@ async function run() {
       // ── fetch all listings ──────────────────────────────────────────
       const tasks = pendingSelections.flatMap(sel =>
         sel.cardNames.map((name, i) => ({
-          productId:   sel.cardIds[i],
+          productId:   sel.cardIds[i].productId,
+          printing:    sel.cardIds[i].printing,
           displayName: `${name} [${sel.setName}]`,
         }))
       );
@@ -281,6 +206,7 @@ async function run() {
       const progressHandlers = ui.showProgress(tasks.length);
       progressUpdater = progressHandlers.onComplete;
       cardPageUpdater = progressHandlers.onPage;
+      debugLogUpdater = progressHandlers.onDebug;
 
       let allCardData;
       try {
@@ -292,6 +218,15 @@ async function run() {
       } finally {
         progressUpdater = null;
         cardPageUpdater = null;
+        debugLogUpdater = null;
+      }
+
+      if (process.env.DEBUG_DUMP) {
+        try {
+          const dump = await ipc.call('dump_listings', {});
+          ui.muted(`Debug dump: ${dump.cards} card(s) written to ${dump.path}`);
+          await new Promise(r => setTimeout(r, 1200));
+        } catch (_) {}
       }
 
       // ── build first-listing cart (cheapest per card, no filter) ────
@@ -319,16 +254,17 @@ async function run() {
       ui.muted('Optimising cart…');
 
       const DEFAULT_CONDITIONS = ['Near Mint', 'Lightly Played'];
-      const DEFAULT_QUALS      = ['Verified'];
+      const DEFAULT_QUALS      = [];
 
-      let defaultCart, filterOptions;
+      let defaultCart, filterOptions, defaultOverrides = [];
       try {
         let defaultResult;
         [defaultResult, filterOptions] = await Promise.all([
           ipc.call('optimize_filtered', { conditions: DEFAULT_CONDITIONS, sellerQuals: DEFAULT_QUALS }),
           ipc.call('get_filter_options', {}),
         ]);
-        defaultCart = defaultResult.cart;
+        defaultCart      = defaultResult.cart;
+        defaultOverrides = defaultResult.overrides || [];
       } catch (e) {
         ui.muted(`Optimisation error: ${e.message}`);
         await new Promise(r => setTimeout(r, 2000));
@@ -338,7 +274,8 @@ async function run() {
       // ── dynamic optimizer screen ────────────────────────────────────
       const dynamicResult = await ui.showDynamicOptimizer(
         firstListingCart, defaultCart, filterOptions,
-        { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS }
+        { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS },
+        { totalCards: Object.keys(allCardData).length, initialOverrides: defaultOverrides }
       );
 
       if (dynamicResult.action === 'home')    return;
@@ -384,7 +321,7 @@ async function run() {
   // ── boot ───────────────────────────────────────────────────────────────
   ui.initScreen();
   ipc.spawnBackend();
-  ipc.on('backend_log', msg => ui.muted(msg.text));
+  ipc.on('backend_log', msg => debugLogUpdater ? debugLogUpdater(msg.text) : ui.muted(msg.text));
 
   ui.header('Loading…');
   const theme = await ipc.call('get_theme', {});
@@ -395,6 +332,7 @@ async function run() {
   let progressUpdater     = null;
   let cardPageUpdater     = null;
   let cartProgressUpdater = null;
+  let debugLogUpdater     = null;
   ipc.on('progress',           msg => progressUpdater     && progressUpdater(msg.card));
   ipc.on('card_page_progress', msg => cardPageUpdater     && cardPageUpdater(msg.card, msg.fetched));
   ipc.on('cart_progress',      msg => cartProgressUpdater && cartProgressUpdater(msg.card));

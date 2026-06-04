@@ -246,9 +246,33 @@ def handle_fetch_cards(params):
             return []
         data = r.json()
         results = data.get("result", data.get("results", data)) if isinstance(data, dict) else data
-    out = {}
+
+    # Collect printings per productID so we can detect multi-printing products.
+    pid_to_info = {}
     for item in results:
-        out[item.get("productName")] = item.get("productID")
+        name = item.get("productName") or ""
+        if name.startswith("Code Card"):
+            continue
+        pid      = item.get("productID")
+        printing = item.get("printing") or None
+        number   = item.get("number") or None
+        if pid not in pid_to_info:
+            pid_to_info[pid] = {"name": name, "printings": set(), "number": number}
+        if printing:
+            pid_to_info[pid]["printings"].add(printing)
+
+    # When a single productID covers multiple printings, expose each printing as
+    # its own selectable entry so users can request a specific variant.
+    out = {}
+    for pid, info in pid_to_info.items():
+        name      = info["name"]
+        printings = info["printings"]
+        number    = info["number"]
+        if len(printings) > 1:
+            for printing in sorted(printings):
+                out[f"{name} ({printing})"] = {"productId": pid, "printing": printing, "number": number}
+        else:
+            out[name] = {"productId": pid, "printing": next(iter(printings), None), "number": number}
     return out
 
 
@@ -256,7 +280,7 @@ _MAX_RETRIES = 4
 _RETRY_BACKOFF = [2, 5, 10, 20]  # seconds between attempts
 
 
-def _fetch_one(product_id, page_cb=None):
+def _fetch_one(product_id, printing=None, page_cb=None):
     """Fetch ALL listings for a product, paginating until exhausted.
 
     page_cb(count) is called after each full page (count = total fetched so far).
@@ -270,9 +294,12 @@ def _fetch_one(product_id, page_cb=None):
     session = requests.Session()
     try:
         while True:
+            term_filter = {"sellerStatus": "Live", "channelId": 0}
+            if printing:
+                term_filter["printing"] = [printing]
             payload = {
                 "filters": {
-                    "term": {"sellerStatus": "Live", "channelId": 0},
+                    "term": term_filter,
                     "range": {"quantity": {"gte": 1}},
                     "exclude": {"channelExclusion": 0},
                 },
@@ -412,7 +439,7 @@ def handle_fetch_listings(params):
     global _cached_card_data
 
     tasks = params["tasks"]
-    max_workers = min(8, len(tasks))
+    max_workers = min(16, len(tasks))
 
     all_card_data = {}
     total = len(tasks)
@@ -425,7 +452,7 @@ def handle_fetch_listings(params):
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_map = {
-            ex.submit(_fetch_one, t["productId"], _make_page_cb(t["displayName"])): t
+            ex.submit(_fetch_one, t["productId"], t.get("printing"), _make_page_cb(t["displayName"])): t
             for t in tasks
         }
         for future in as_completed(future_map):
@@ -465,9 +492,18 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
     has_cond  = bool(conditions)
     has_qual  = bool(seller_quals)
 
+    cond_str = " / ".join(conditions) if conditions else ""
+    qual_str  = " / ".join(seller_quals) if seller_quals else ""
+
     for pid, card_data in card_data_map.items():
         raw  = card_data["market_listings"]
         name = card_data["card_info"]["name"]
+
+        # Cards with no listings at all: flag unconditionally, skip filter tiers
+        if not raw:
+            filtered_data[pid] = {**card_data, "market_listings": []}
+            overrides.append({"name": name, "applied": "no listings found"})
+            continue
 
         # Tier 1: full filter
         result = _apply_filters(raw, conditions, seller_quals)
@@ -480,7 +516,7 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
             result = _apply_filters(raw, [], seller_quals)
             if result:
                 filtered_data[pid] = {**card_data, "market_listings": result}
-                overrides.append({"name": name, "applied": "condition filter removed"})
+                overrides.append({"name": name, "applied": f"no {cond_str} listings from {qual_str} sellers"})
                 continue
 
         # Tier 3: keep condition, drop seller qual
@@ -488,12 +524,18 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
             result = _apply_filters(raw, conditions, [])
             if result:
                 filtered_data[pid] = {**card_data, "market_listings": result}
-                overrides.append({"name": name, "applied": "seller filter removed"})
+                reason = (f"no {qual_str} seller listings in {cond_str}"
+                          if has_cond else f"no {qual_str} seller listings")
+                overrides.append({"name": name, "applied": reason})
                 continue
 
         # Tier 4: no filter
         filtered_data[pid] = {**card_data, "market_listings": raw}
-        overrides.append({"name": name, "applied": "all filters removed"})
+        if has_cond and has_qual:
+            reason = f"no listings match {cond_str} or {qual_str} sellers"
+        else:
+            reason = f"no {cond_str} listings"
+        overrides.append({"name": name, "applied": reason})
 
     return filtered_data, overrides
 
@@ -577,6 +619,15 @@ def handle_close_browser(params):
     return {"ok": True}
 
 
+def handle_dump_listings(params):
+    """Write the cached listings to a JSON file for optimizer debugging."""
+    out_path = params.get("path") or os.path.join(os.getcwd(), "listings_debug.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(_cached_card_data, f, indent=2)
+    _log(f"listings dumped to {out_path}")
+    return {"path": out_path, "cards": len(_cached_card_data)}
+
+
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
@@ -590,6 +641,7 @@ HANDLERS = {
     "get_filter_options":  handle_get_filter_options,
     "create_cart":         handle_create_cart,
     "close_browser":       handle_close_browser,
+    "dump_listings":       handle_dump_listings,
 }
 
 # ── main loop ─────────────────────────────────────────────────────────────────

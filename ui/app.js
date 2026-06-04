@@ -27,17 +27,13 @@ function desaturate([r, g, b], factor) {
 }
 
 function initScreen() {
-  // Request a comfortable window size via VT sequence (Windows Terminal + xterm-compatible).
-  // By the time runSplash is called (after async IPC), the terminal will have resized
-  // and blessed will have received SIGWINCH with the updated dimensions.
-  process.stdout.write('\x1b[8;50;160t');
-
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
     title:       'TCGScraper',
-    cursor:      { artificial: true, shape: 'line', blink: true, color: null },
   });
+
+  screen.enableMouse();
 
   outerBox = blessed.box({
     parent: screen,
@@ -658,12 +654,85 @@ function showMultiSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
     logBox.hide();
+    const itemMeta   = opts.itemMeta || null;
+    const hasNumbers = !!(itemMeta && itemMeta.some(m => m && m.number));
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  SPACE: toggle   ENTER: confirm   S: save   L: load   R: restart   Q: quit', 1, '#888888');
+    hintWidget(
+      '  SPACE: toggle   ENTER: confirm   PgUp/PgDn: scroll   S: save   L: load   I: invert' +
+      (hasNumbers ? '   Z: sort' : '') +
+      '   R: restart   Q: quit',
+      1, '#888888'
+    );
 
     const COLS = 3;
     const rows = Math.ceil(items.length / COLS);
     const selected = new Set();
+    let undoPrev = null;
+
+    let sortMode = hasNumbers ? 'number' : 'alpha';
+
+    function cardNumSortKey(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      if (!meta || !meta.number) return Infinity;
+      const n = parseInt(meta.number.split('/')[0].trim(), 10);
+      return isNaN(n) ? Infinity : n;
+    }
+
+    function printingOrder(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      const p = meta && meta.printing;
+      return (!p || p === 'Normal') ? 0 : 1;
+    }
+
+    function buildSortedOrder() {
+      const indices = items.map((_, i) => i);
+      if (sortMode === 'number') {
+        indices.sort((a, b) => {
+          const na = cardNumSortKey(a), nb = cardNumSortKey(b);
+          if (na !== nb) return na - nb;
+          const pa = printingOrder(a), pb = printingOrder(b);
+          if (pa !== pb) return pa - pb;
+          return items[a].localeCompare(items[b]);
+        });
+      } else {
+        indices.sort((a, b) => items[a].localeCompare(items[b]));
+      }
+      return indices;
+    }
+
+    function formatCardNum(origIdx) {
+      const meta = itemMeta && itemMeta[origIdx];
+      if (!meta || !meta.number) return '';
+      const part = meta.number.split('/')[0].trim();
+      const n = parseInt(part, 10);
+      return isNaN(n) ? part : String(n);
+    }
+
+    let sortedOrder = buildSortedOrder();
+
+    const actionBar = blessed.text({
+      parent: outerBox,
+      top: 2, left: 1, right: 1, height: 1,
+      content: '',
+      style: { bg: '#000000' },
+      tags: true,
+    });
+    activeHints.push(actionBar);
+
+    function renderActionBar() {
+      const undoColor = undoPrev !== null ? PRIMARY : '#555555';
+      const sortBtn   = hasNumbers
+        ? `   {${SECONDARY}-fg}[ Z ] ${sortMode === 'number' ? 'A/Z' : '#n'}{/}`
+        : '';
+      actionBar.setContent(
+        `  {${SECONDARY}-fg}[ A ] Select All{/}   ` +
+        `{${SECONDARY}-fg}[ D ] Deselect All{/}   ` +
+        `{${SECONDARY}-fg}[ I ] Invert{/}   ` +
+        `{${undoColor}-fg}[ U ] Undo{/}` +
+        sortBtn
+      );
+      screen.render();
+    }
 
     if (opts.initialSelected) {
       for (const name of opts.initialSelected) {
@@ -673,7 +742,19 @@ function showMultiSelect(items, promptText, opts = {}) {
     }
 
     let curRow = 0, curCol = 0;
+    let scrollTop = 0;
     const km = makeKeyManager();
+
+    // outerBox border=2, hints rows 0-1, actionBar row 2, gridBox top=3, bottom=2
+    function getVisH() {
+      return Math.max(1, (screen.rows || screen.height || 50) - 7);
+    }
+
+    function ensureCursorVisible() {
+      const visH = getVisH();
+      if (curRow < scrollTop) scrollTop = curRow;
+      else if (curRow >= scrollTop + visH) scrollTop = curRow - visH + 1;
+    }
 
     function cleanupAndResolve(value) {
       km.cleanup();
@@ -683,36 +764,54 @@ function showMultiSelect(items, promptText, opts = {}) {
     }
 
     const gridBox = blessed.box({
-      parent:       outerBox,
+      parent: outerBox,
       top: 3, left: 1, right: 1, bottom: 2,
-      scrollable:   true,
-      alwaysScroll: true,
-      keys:         true,
-      tags:         true,
-      scrollbar: { ch: '│', style: { fg: PRIMARY } },
+      keys:   true,
+      mouse:  true,
+      tags:   true,
     });
 
+    // scroll position indicator shown when content overflows
+    const scrollIndicator = blessed.text({
+      parent:  outerBox,
+      bottom:  2, right: 2,
+      height:  1,
+      content: '',
+      style:   { fg: '#555555' },
+      tags:    false,
+    });
+    activeHints.push(scrollIndicator);
+
     function render() {
+      const visH     = getVisH();
       const w        = Math.max(30, (screen.width || 120) - 6);
       const colWidth = Math.floor(w / COLS);
       const maxText  = Math.max(4, colWidth - 6);
       const lines    = [];
 
-      for (let r = 0; r < rows; r++) {
+      const startRow = scrollTop;
+      const endRow   = Math.min(rows, scrollTop + visH);
+
+      for (let r = startRow; r < endRow; r++) {
         let line = '';
         for (let c = 0; c < COLS; c++) {
-          const idx   = c * rows + r;
-          if (idx >= items.length) {
+          const displayIdx = c * rows + r;
+          if (displayIdx >= items.length) {
             line += ' '.repeat(colWidth);
             continue;
           }
-          const name   = items[idx];
-          const isCur  = (r === curRow && c === curCol);
-          const isSel  = selected.has(idx);
-          const prefix = isSel ? '[x] ' : '[ ] ';
-          const cell   = name.length > maxText
-            ? name.substring(0, maxText - 1) + '…'
-            : name.padEnd(maxText);
+          const origIdx = sortedOrder[displayIdx];
+          const isCur   = (r === curRow && c === curCol);
+          const isSel   = selected.has(origIdx);
+          const prefix  = isSel ? '[x] ' : '[ ] ';
+          let label     = items[origIdx];
+          if (sortMode === 'number') {
+            const numStr = formatCardNum(origIdx);
+            if (numStr) label = `${numStr}  ${label}`;
+          }
+          const cell = label.length > maxText
+            ? label.substring(0, maxText - 1) + '…'
+            : label.padEnd(maxText);
           const text = escape(prefix + cell);
           if (isCur) {
             line += `{#ffffff-bg}{#000000-fg} ${text} {/}`;
@@ -726,10 +825,11 @@ function showMultiSelect(items, promptText, opts = {}) {
       }
       gridBox.setContent(lines.join('\n'));
 
-      const visH = Math.max(1, gridBox.height);
-      const base = gridBox.childBase || 0;
-      if (curRow >= base + visH) gridBox.scrollTo(curRow - visH + 1);
-      else if (curRow < base)    gridBox.scrollTo(curRow);
+      if (rows > visH) {
+        scrollIndicator.setContent(`${startRow + 1}-${endRow} of ${rows}`);
+      } else {
+        scrollIndicator.setContent('');
+      }
 
       screen.render();
     }
@@ -739,25 +839,48 @@ function showMultiSelect(items, promptText, opts = {}) {
       if (curCol > maxCol) curCol = maxCol;
     }
 
-    gridBox.key('up',       () => { if (curRow > 0) { curRow--; clampCol(); render(); } });
-    gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
-    gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
-    gridBox.key('right',    () => {
+    gridBox.key('up', () => {
+      if (curRow > 0) { curRow--; clampCol(); ensureCursorVisible(); render(); }
+    });
+    gridBox.key('down', () => {
+      if (curRow < rows - 1) { curRow++; clampCol(); ensureCursorVisible(); render(); }
+    });
+    gridBox.key('left',  () => { if (curCol > 0) { curCol--; render(); } });
+    gridBox.key('right', () => {
       const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
       if (curCol < maxCol) { curCol++; render(); }
     });
-    gridBox.key('pageup',   () => {
-      curRow = Math.max(0, curRow - Math.max(1, gridBox.height));
+    gridBox.key('pageup', () => {
+      const visH = getVisH();
+      scrollTop = Math.max(0, scrollTop - visH);
+      curRow    = scrollTop;
       clampCol(); render();
     });
     gridBox.key('pagedown', () => {
-      curRow = Math.min(rows - 1, curRow + Math.max(1, gridBox.height));
+      const visH     = getVisH();
+      const maxScroll = Math.max(0, rows - visH);
+      scrollTop = Math.min(maxScroll, scrollTop + visH);
+      curRow    = Math.min(rows - 1, scrollTop + visH - 1);
       clampCol(); render();
     });
+    gridBox.on('wheelup', () => {
+      const visH = getVisH();
+      scrollTop = Math.max(0, scrollTop - 3);
+      if (curRow >= scrollTop + visH) { curRow = scrollTop + visH - 1; clampCol(); }
+      render();
+    });
+    gridBox.on('wheeldown', () => {
+      const visH      = getVisH();
+      const maxScroll = Math.max(0, rows - visH);
+      scrollTop = Math.min(maxScroll, scrollTop + 3);
+      if (curRow < scrollTop) { curRow = scrollTop; clampCol(); }
+      render();
+    });
     gridBox.key('space', () => {
-      const idx = curCol * rows + curRow;
-      if (idx < items.length) {
-        selected.has(idx) ? selected.delete(idx) : selected.add(idx);
+      const displayIdx = curCol * rows + curRow;
+      if (displayIdx < items.length) {
+        const origIdx = sortedOrder[displayIdx];
+        selected.has(origIdx) ? selected.delete(origIdx) : selected.add(origIdx);
         render();
       }
     });
@@ -778,10 +901,58 @@ function showMultiSelect(items, promptText, opts = {}) {
     gridBox.key(['q', 'Q'], () => {
       cleanupAndResolve({ action: 'exit', selected: [] });
     });
+    gridBox.key(['a', 'A'], () => {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) selected.add(i);
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['d', 'D'], () => {
+      undoPrev = new Set(selected);
+      selected.clear();
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['i', 'I'], () => {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) {
+        selected.has(i) ? selected.delete(i) : selected.add(i);
+      }
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['u', 'U'], () => {
+      if (undoPrev === null) return;
+      selected.clear();
+      for (const idx of undoPrev) selected.add(idx);
+      undoPrev = null;
+      renderActionBar();
+      render();
+    });
+    gridBox.key(['z', 'Z'], () => {
+      if (!hasNumbers) return;
+      // Remember which card the cursor is on so we can restore its position.
+      const currentDisplayIdx = curCol * rows + curRow;
+      const currentOrigIdx = currentDisplayIdx < sortedOrder.length
+        ? sortedOrder[currentDisplayIdx] : null;
+      sortMode    = sortMode === 'number' ? 'alpha' : 'number';
+      sortedOrder = buildSortedOrder();
+      if (currentOrigIdx !== null) {
+        const newDisplayIdx = sortedOrder.indexOf(currentOrigIdx);
+        if (newDisplayIdx >= 0) {
+          curRow = newDisplayIdx % rows;
+          curCol = Math.floor(newDisplayIdx / rows);
+        }
+      }
+      ensureCursorVisible();
+      renderActionBar();
+      render();
+    });
     km.add('escape', () => cleanupAndResolve({ action: 'restart', selected: [] }));
 
     gridBox.focus();
     activeWidget = gridBox;
+    renderActionBar();
     render();
   });
 }
@@ -793,7 +964,7 @@ function showAutocomplete(choices, promptText) {
     sectionClear();
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back', 1, '#888888');
+    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
 
     let filtered = [...choices];
     let destroyed = false;
@@ -824,11 +995,12 @@ function showAutocomplete(choices, promptText) {
       mouse:        true,
       scrollable:   true,
       alwaysScroll: true,
-      scrollbar: { ch: '│' },
+      scrollbar: { ch: '│', track: { ch: ' ' } },
       items: filtered,
       style: {
         selected: { bg: '#ffffff', fg: '#000000', bold: true },
         item:     { fg: SECONDARY },
+        scrollbar: { fg: PRIMARY, inverse: true },
       },
       tags: false,
     });
@@ -884,6 +1056,17 @@ function showAutocomplete(choices, promptText) {
 
     inputBox.key('down', () => dropList.focus());
 
+    inputBox.key('pageup', () => {
+      dropList.scroll(-Math.max(1, dropList.height));
+      screen.render();
+      inputBox.focus();
+    });
+    inputBox.key('pagedown', () => {
+      dropList.scroll(Math.max(1, dropList.height));
+      screen.render();
+      inputBox.focus();
+    });
+
     inputBox.key(['enter', 'return'], () => {
       if (filtered.length === 0) { flashInvalidInput(); return; }
       cleanupAndResolve(filtered[dropList.selected] ?? null);
@@ -897,6 +1080,8 @@ function showAutocomplete(choices, promptText) {
     dropList.key('up', () => {
       if (dropList.selected === 0) inputBox.focus();
     });
+    dropList.key('pageup',   () => { dropList.scroll(-Math.max(1, dropList.height)); screen.render(); });
+    dropList.key('pagedown', () => { dropList.scroll(Math.max(1, dropList.height));  screen.render(); });
 
     km.add('escape', () => cleanupAndResolve(null));
 
@@ -985,7 +1170,16 @@ function showConfirm(question) {
 
 function showProgress(total) {
   sectionClear();
-  header('Scraping card listings…');
+  logBox.hide();
+
+  const headerWidget = blessed.text({
+    parent: outerBox,
+    top: 1, left: 1, right: 1, height: 1,
+    content: `{bold}{${PRIMARY}-fg}Scraping card listings…{/}`,
+    style: { bg: '#000000' },
+    tags: true,
+  });
+  progressWidgets.push(headerWidget);
 
   const barTrack = blessed.box({
     parent: outerBox,
@@ -999,6 +1193,14 @@ function showProgress(total) {
     top: 0, left: 0, width: 0, height: 1,
     style: { bg: PRIMARY },
   });
+
+  // Opaque background row prevents logBox content bleeding through at the status line
+  const statusRowBg = blessed.box({
+    parent: outerBox,
+    top: 5, left: 1, right: 1, height: 1,
+    style: { bg: '#000000' },
+  });
+  progressWidgets.push(statusRowBg);
 
   const statusText = blessed.text({
     parent: outerBox,
@@ -1018,6 +1220,26 @@ function showProgress(total) {
   });
   progressWidgets.push(pctText);
 
+  // Separator and scrollable debug log area below the progress widgets
+  const debugSep = blessed.text({
+    parent: outerBox,
+    top: 7, left: 1, right: 1, height: 1,
+    content: `{#333333-fg}${'─'.repeat(80)}{/}`,
+    style: { bg: '#000000' },
+    tags: true,
+  });
+  progressWidgets.push(debugSep);
+
+  const debugLog = blessed.log({
+    parent: outerBox,
+    top: 8, left: 1, right: 1, bottom: 1,
+    scrollable: true,
+    alwaysScroll: true,
+    tags: true,
+    style: { fg: '#888888' },
+  });
+  progressWidgets.push(debugLog);
+
   let done = 0;
 
   function onComplete(cardName) {
@@ -1034,7 +1256,12 @@ function showProgress(total) {
     screen.render();
   }
 
-  return { onComplete, onPage };
+  function onDebug(text) {
+    debugLog.log(`{#888888-fg}${escape(text)}{/}`);
+    screen.render();
+  }
+
+  return { onComplete, onPage, onDebug };
 }
 
 // ── progress bar (cart creation) ──────────────────────────────────────────
@@ -1050,8 +1277,9 @@ function showCartProgress(total, summaryInfo) {
     logBox.log(divider);
     logBox.log(`{${SECONDARY}-fg}  Selected: {bold}{${PRIMARY}-fg}${escape(summaryInfo.cartTitle)}{/}`);
     logBox.log(
-      `{${SECONDARY}-fg}  Sellers: ${summaryInfo.sellers}` +
-      `   Cards: $${summaryInfo.rawCost.toFixed(2)}` +
+      `{${SECONDARY}-fg}  Requested: ${summaryInfo.cards}` +
+      `   Sellers: ${summaryInfo.sellers}` +
+      `   Subtotal: $${summaryInfo.rawCost.toFixed(2)}` +
       `   Shipping: $${summaryInfo.shipping.toFixed(2)}` +
       `   Total: $${summaryInfo.total.toFixed(2)}{/}`
     );
@@ -1071,6 +1299,14 @@ function showCartProgress(total, summaryInfo) {
     top: 0, left: 0, width: 0, height: 1,
     style: { bg: ACCENT },
   });
+
+  // Opaque background row prevents logBox content bleeding through at the status line
+  const statusRowBg = blessed.box({
+    parent: outerBox,
+    bottom: 2, left: 1, right: 1, height: 1,
+    style: { bg: '#000000' },
+  });
+  progressWidgets.push(statusRowBg);
 
   const statusText = blessed.text({
     parent: outerBox,
@@ -1112,15 +1348,17 @@ function showCartComparison(first, optimized) {
 
   const leftLines = [
     'FIRST LISTING',
+    `  Cards requested:   ${first.cards}`,
     `  Unique sellers:    ${first.sellers}`,
-    `  Raw card cost:     $${first.rawCost.toFixed(2)}`,
+    `  Subtotal:          $${first.rawCost.toFixed(2)}`,
     `  Shipping:          $${first.shipping.toFixed(2)}`,
     `  Estimated total:   $${first.total.toFixed(2)}`,
   ];
   const rightLines = [
     'OPTIMIZED CART',
+    `  Cards requested:   ${optimized.cards}`,
     `  Unique sellers:    ${optimized.sellers}`,
-    `  Raw card cost:     $${optimized.rawCost.toFixed(2)}`,
+    `  Subtotal:          $${optimized.rawCost.toFixed(2)}`,
     `  Shipping:          $${optimized.shipping.toFixed(2)}`,
     `  Estimated total:   $${optimized.total.toFixed(2)}`,
   ];
@@ -1374,16 +1612,16 @@ function showMainScreen() {
 
     // Icon box
     const iconBox = blessed.box({
-      parent: outerBox,
-      top:    topOff,
-      left:   leftOff,
-      width:  boxW,
-      height: boxH,
-      border: { type: 'line', fg: PRIMARY },
-      style:  { border: { fg: PRIMARY }, bg: '#000000' },
-      tags:   true,
-      mouse:  true,
-      keys:   true,
+      parent:    outerBox,
+      top:       topOff,
+      left:      leftOff,
+      width:     boxW,
+      height:    boxH,
+      border:    { type: 'line', fg: PRIMARY },
+      style:     { border: { fg: PRIMARY }, bg: '#000000' },
+      tags:      true,
+      clickable: true,
+      keys:      true,
     });
 
     // Center art horizontally inside box (inside border = boxW - 2)
@@ -1415,23 +1653,23 @@ function showMainScreen() {
     const exitLeft    = btnsLeft + restartStr.length + btnGap;
 
     const restartWidget = blessed.box({
-      parent: outerBox,
-      top:    topOff + boxH + 3,
-      left:   restartLeft,
-      width:  restartStr.length + 1,
-      height: 1,
-      tags:   true,
-      mouse:  true,
+      parent:    outerBox,
+      top:       topOff + boxH + 3,
+      left:      restartLeft,
+      width:     restartStr.length + 1,
+      height:    1,
+      tags:      true,
+      clickable: true,
     });
 
     const exitWidget = blessed.box({
-      parent: outerBox,
-      top:    topOff + boxH + 3,
-      left:   exitLeft,
-      width:  exitStr.length + 1,
-      height: 1,
-      tags:   true,
-      mouse:  true,
+      parent:    outerBox,
+      top:       topOff + boxH + 3,
+      left:      exitLeft,
+      width:     exitStr.length + 1,
+      height:    1,
+      tags:      true,
+      clickable: true,
     });
 
     // Welcome banner — top of screen, inside border
@@ -1507,18 +1745,18 @@ function buildSummary(cart) {
   const sellers = new Set(cart.map(i => i.seller).filter(Boolean));
   const rawCost = cart.reduce((s, i) => s + (i.price || 0), 0);
   const shipping = calcShipping(cart);
-  return { sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
+  return { cards: cart.length, sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
 }
 
 // ── dynamic optimizer screen ──────────────────────────────────────────────
 //
-// Three selectable cart summaries across the top (First Listing, Default
-// Optimized, Your Cart), with Condition and Seller Qualification filter
-// panels below that live-update Column 3 on every toggle.
+// Two selectable cart summaries across the top (First Listing, Dynamic
+// Optimized), with Condition and Seller Qualification filter panels below
+// that live-update Column 2 on every toggle.
 //
 // Returns Promise<{ action: 'confirm'|'restart'|'home', cart: [...] }>
 
-function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilters = {}) {
+function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilters = {}, extra = {}) {
   return new Promise(resolve => {
     sectionClear();
     logBox.hide();
@@ -1527,7 +1765,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // ── state ──────────────────────────────────────────────────────────
     let zone         = 0;   // 0 = top (carts)   1 = bottom (filters)
-    let selectedCart = 1;   // 0 = first   1 = default   2 = user
+    let selectedCart = 1;   // 0 = first   1 = dynamic
     let filterCol    = 0;   // 0 = conditions   1 = sellerQuals
     const filterRows = [0, 0];
 
@@ -1541,12 +1779,13 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // Default checked state mirrors Column 2's optimization criteria
     const defaultConds = defaultFilters.conditions || ['Near Mint', 'Lightly Played'];
-    const defaultQuals = defaultFilters.quals || ['Verified'];
+    const defaultQuals = defaultFilters.quals || [];
     const condChecked = new Set(defaultConds.filter(c => CONDITIONS.includes(c)));
     const qualChecked = new Set(defaultQuals.filter(q => QUALS.includes(q)));
 
+    const totalCards     = extra.totalCards ?? firstCart.length;
     let userCart         = defaultCart;
-    let currentOverrides = [];
+    let currentOverrides = extra.initialOverrides || [];
     let isCalc           = false;
     let debounceId       = null;
     let spinnerTimer     = null;
@@ -1554,14 +1793,13 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     const SPINNER     = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
     const summaries = [
-      buildSummary(firstCart),
-      buildSummary(defaultCart),
+      { ...buildSummary(firstCart), cards: totalCards },
       buildSummary(userCart),
     ];
 
     // ── layout ─────────────────────────────────────────────────────────
     const CART_TOP   = 2;
-    const CART_H     = 7;
+    const CART_H     = 10;
     const FILTER_TOP = CART_TOP + CART_H + 2;
     const FILTER_H   = 10;
     const NOTICE_TOP = FILTER_TOP + FILTER_H;
@@ -1585,15 +1823,15 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
     activeHints.push(hintWidget);
 
-    // ── 3 cart boxes ───────────────────────────────────────────────────
-    const CART_TITLES = ['FIRST LISTING', 'DEFAULT OPTIMIZED', 'YOUR CART'];
-    const cartBoxes = [0, 1, 2].map(i => {
+    // ── 2 cart boxes ───────────────────────────────────────────────────
+    const CART_TITLES = ['FIRST LISTING', 'DYNAMIC OPTIMIZED'];
+    const cartBoxes = [0, 1].map(i => {
       const box = blessed.box({
         parent: outerBox,
         top:    CART_TOP,
-        left:   `${Math.round(i * 33.33)}%`,
-        width:  i < 2 ? '33%' : undefined,
-        right:  i === 2 ? 1 : undefined,
+        left:   i === 0 ? 0 : '50%',
+        width:  i === 0 ? '50%' : undefined,
+        right:  i === 1 ? 1 : undefined,
         height: CART_H,
         border: { type: 'line' },
         style:  { border: { fg: '#333333' }, bg: '#000000' },
@@ -1662,7 +1900,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       if (spinnerTimer) clearInterval(spinnerTimer);
       spinnerTimer = setInterval(() => {
         spinnerFrame = (spinnerFrame + 1) % SPINNER.length;
-        renderCartBox(2);
+        renderCartBox(1);
       }, 80);
     }
 
@@ -1683,13 +1921,14 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
           });
           userCart         = result.cart;
           currentOverrides = result.overrides || [];
-          summaries[2]     = buildSummary(userCart);
+          summaries[1]     = buildSummary(userCart);
         } catch (_) {
           // keep previous result on error
         } finally {
           isCalc = false;
           stopSpinner();
-          renderCartBox(2);
+          renderCartBox(0);
+          renderCartBox(1);
           renderNotice();
         }
       }, 300);
@@ -1701,25 +1940,61 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       const isSelected = selectedCart === i;
       const isTopZone  = zone === 0;
 
+      // Cheapest indicator: independent of selection/tab state; suppressed during recalc
+      const cheapestIdx = (!isCalc && summaries[0].total !== summaries[1].total)
+        ? (summaries[0].total < summaries[1].total ? 0 : 1)
+        : -1;
+      const isCheapest = cheapestIdx === i;
+
+      // Border stays purely selection/navigation driven
       box.style.border.fg = (isTopZone && isSelected) ? PRIMARY : '#333333';
 
-      if (i === 2 && isCalc) {
-        const sp = SPINNER[spinnerFrame];
-        box.setContent(
-          `{bold}{${SECONDARY}-fg}${escape(CART_TITLES[i])}{/}\n\n` +
-          `{${PRIMARY}-fg}  ${sp} Recalculating…{/}`
-        );
+      // Inner border uses fg chars — reliable across all terminals.
+      // CART_H=10 gives 8 interior rows: top bar + 6 content + bottom bar.
+      // Non-cheapest boxes use empty top/bottom rows so layouts stay aligned.
+      const CHEAP_GREEN = '#88cc88';
+      const innerW = Math.max(4, ((typeof box.width === 'number' ? box.width : 60) - 2));
+      const bar = isCheapest ? `{${CHEAP_GREEN}-fg}${'─'.repeat(innerW)}{/}` : '';
+
+      // Wraps a content line with │ side bars, padding to fill the full width.
+      // For non-cheapest boxes returns the styled text unchanged.
+      function wrapLine(plainText, styledText) {
+        if (!isCheapest) return styledText;
+        const padLen = Math.max(0, innerW - 4 - plainText.length);
+        return `{${CHEAP_GREEN}-fg}│{/} ${styledText}${' '.repeat(padLen)} {${CHEAP_GREEN}-fg}│{/}`;
+      }
+
+      if (i === 1 && isCalc) {
+        const sp      = SPINNER[spinnerFrame];
+        const titleStr = escape(CART_TITLES[i]);
+        const spinStr  = `  ${sp} Recalculating…`;
+        box.setContent([
+          bar,
+          wrapLine(titleStr,  `{bold}{${SECONDARY}-fg}${titleStr}{/}`),
+          wrapLine('', ''),
+          wrapLine(spinStr,   `{${PRIMARY}-fg}${spinStr}{/}`),
+          wrapLine('', ''), wrapLine('', ''), wrapLine('', ''),
+          bar,
+        ].join('\n'));
       } else {
-        const s     = summaries[i];
-        const color = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
-        box.setContent(
-          `{bold}{${color}-fg}${escape(CART_TITLES[i])}{/}\n` +
-          `{${color}-fg}` +
-          `  Sellers:  ${s.sellers}\n` +
-          `  Cards:    $${s.rawCost.toFixed(2)}\n` +
-          `  Shipping: $${s.shipping.toFixed(2)}\n` +
-          `  Total:    $${s.total.toFixed(2)}{/}`
-        );
+        const s        = summaries[i];
+        const color    = (isTopZone && isSelected) ? PRIMARY : SECONDARY;
+        const titleStr  = escape(CART_TITLES[i]);
+        const cardsStr  = `  Requested: ${s.cards}`;
+        const sellers   = `  Sellers:  ${s.sellers}`;
+        const subtotal  = `  Subtotal: $${s.rawCost.toFixed(2)}`;
+        const shipping  = `  Shipping: $${s.shipping.toFixed(2)}`;
+        const total     = `  Total:    $${s.total.toFixed(2)}`;
+        box.setContent([
+          bar,
+          wrapLine(titleStr,  `{bold}{${color}-fg}${titleStr}{/}`),
+          wrapLine(cardsStr,  `{${color}-fg}${cardsStr}{/}`),
+          wrapLine(sellers,   `{${color}-fg}${sellers}{/}`),
+          wrapLine(subtotal,  `{${color}-fg}${subtotal}{/}`),
+          wrapLine(shipping,  `{${color}-fg}${shipping}{/}`),
+          wrapLine(total,     `{${color}-fg}${total}{/}`),
+          bar,
+        ].join('\n'));
       }
       screen.render();
     }
@@ -1766,7 +2041,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       } else {
         noticeBox.style.border.fg = '#ff9955';
         const lines = currentOverrides.map(o =>
-          `{#ffaa55-fg}⚠ ${escape(o.name)}{/}  {#888888-fg}(${escape(o.applied)}){/}`
+          `{#ffaa55-fg}⚠ ${escape(o.name)}:{/} {#888888-fg}${escape(o.applied)}{/}`
         );
         noticeBox.setContent(lines.join('\n'));
       }
@@ -1774,7 +2049,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     }
 
     function renderAll() {
-      for (let i = 0; i < 3; i++) renderCartBox(i);
+      for (let i = 0; i < 2; i++) renderCartBox(i);
       for (let c = 0; c < 2; c++) renderFilterBox(c);
       renderNotice();
       renderHint();
@@ -1804,7 +2079,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     km.add('right', () => {
       if (zone === 0) {
-        if (selectedCart < 2) { selectedCart++; renderAll(); }
+        if (selectedCart < 1) { selectedCart++; renderAll(); }
       } else {
         if (filterCol < 1) { filterCol++; renderAll(); filterBoxes[filterCol].focus(); }
       }
@@ -1840,8 +2115,8 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
 
     km.add(['enter', 'return'], () => {
-      if (selectedCart === 2 && isCalc) return; // block Column 3 while calculating
-      const carts = [firstCart, defaultCart, userCart];
+      if (selectedCart === 1 && isCalc) return; // block while recalculating
+      const carts = [firstCart, userCart];
       cleanupAndResolve({
         action: 'confirm',
         cart: carts[selectedCart],
