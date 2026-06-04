@@ -10,3 +10,5 @@ tcgplayer_cookies.json
 .ruff_cache
 /node_modules
 /venv
+/dist
+/build

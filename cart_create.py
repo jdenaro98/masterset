@@ -7,6 +7,12 @@ import tempfile
 import time
 import urllib.request
 
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = sys._MEIPASS
+    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', os.path.join(_BASE_DIR, 'ms-playwright'))
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 from playwright.sync_api import sync_playwright
 
 
@@ -68,8 +74,7 @@ def create_cart(optimized_cart, progress_callback=None):
         return None, [], None
 
     user_data_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "user_data",
+        os.environ.get('TCGSCRAPER_USER_DATA') or _BASE_DIR, 'user_data'
     )
     os.makedirs(user_data_dir, exist_ok=True)
 

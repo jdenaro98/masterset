@@ -26,6 +26,16 @@ import traceback
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Resolve the root directory for bundled assets (art/, etc.).
+# When frozen by PyInstaller, sys._MEIPASS is the extraction dir and
+# PLAYWRIGHT_BROWSERS_PATH must be set before playwright is imported.
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = sys._MEIPASS
+    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', os.path.join(_BASE_DIR, 'ms-playwright'))
+else:
+    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, _BASE_DIR)
+
 
 def _platform_ua():
     if sys.platform == "darwin":
@@ -46,8 +56,7 @@ def _platform_ua():
 import requests
 from playwright.sync_api import sync_playwright
 
-# Make imports work when run from any cwd
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# _BASE_DIR and sys.path already set at module top
 
 import cart_create
 import optimizer
@@ -120,10 +129,7 @@ _cached_card_data = {}
 
 
 def _load_pokemon_names():
-    names_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "art", "ascii", "pokemon", "pokemon_names.json",
-    )
+    names_path = os.path.join(_BASE_DIR, "art", "ascii", "pokemon", "pokemon_names.json")
     with open(names_path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -136,10 +142,7 @@ def handle_get_theme(params):
     if _pokemon_names is None:
         _pokemon_names = _load_pokemon_names()
 
-    art_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "art", "ascii", "pokemon",
-    )
+    art_dir = os.path.join(_BASE_DIR, "art", "ascii", "pokemon")
     files = [f for f in os.listdir(art_dir) if f.endswith("_color.txt")]
     chosen = random.choice(files)
     path = os.path.join(art_dir, chosen)
