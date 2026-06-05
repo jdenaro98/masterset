@@ -55,12 +55,14 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.utilities",
+      "icon": "build/icons/mac/icon.icns",
       "signIgnore": [
         "ms-playwright"
       ]
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icons/win/icon.ico"
     }
   }
 }

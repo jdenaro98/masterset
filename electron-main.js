@@ -19,6 +19,10 @@ const NODE_BIN = resolveNodeBin();
 
 let win, ptyProcess;
 
+if (app.dock) {
+  app.dock.setIcon(path.join(__dirname, 'build', 'icons', 'png', '512x512.png'));
+}
+
 app.whenReady().then(() => {
   win = new BrowserWindow({
     width:           1300,
@@ -26,6 +30,7 @@ app.whenReady().then(() => {
     backgroundColor: '#000000',
     autoHideMenuBar: true,
     title:           'TCGScraper',
+    icon:            path.join(__dirname, 'build', 'icons', 'png', '512x512.png'),
     webPreferences: {
       nodeIntegration:  true,
       contextIsolation: false,
