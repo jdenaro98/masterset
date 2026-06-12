@@ -1956,7 +1956,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
     activeHints.push(hintWidget);
 
-    // ── 2 cart boxes ───────────────────────────────────────────────────
+    // ── 2 cart boxes + savings panel ───────────────────────────────────
     const CART_TITLES = ['FIRST LISTING', 'DYNAMIC OPTIMIZED'];
     const cartBoxes = [0, 1].map(i => {
       const box = blessed.box({
@@ -1972,6 +1972,18 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         keys:   true,
       });
       return box;
+    });
+
+    const savingsBox = blessed.box({
+      parent: outerBox,
+      top:    CART_TOP,
+      left:   '76%',
+      right:  1,
+      height: CART_H,
+      border: { type: 'line' },
+      style:  { border: { fg: '#333333' }, bg: '#000000' },
+      hidden: true,
+      tags:   true,
     });
 
     // ── 2 filter boxes ─────────────────────────────────────────────────
@@ -2019,7 +2031,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       km.cleanup();
       if (spinnerTimer) clearInterval(spinnerTimer);
       if (debounceId)   clearTimeout(debounceId);
-      for (const b of [...cartBoxes, ...filterBoxes, noticeBox]) {
+      for (const b of [...cartBoxes, ...filterBoxes, noticeBox, savingsBox]) {
         try { b.destroy(); } catch (_) {}
       }
       activeWidget = null;
@@ -2060,9 +2072,11 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         } finally {
           isCalc = false;
           stopSpinner();
+          renderSavingsBox();
           renderCartBox(0);
           renderCartBox(1);
           renderNotice();
+          screen.render();
         }
       }, 300);
     }
@@ -2181,7 +2195,45 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       screen.render();
     }
 
+    // ── render: savings panel + layout ────────────────────────────────
+    function renderSavingsBox() {
+      const CHEAP_GREEN = '#88cc88';
+      const savings = !isCalc ? summaries[0].total - summaries[1].total : 0;
+      const show = savings > 0;
+
+      if (show) {
+        // 3-column layout
+        cartBoxes[0].position.left  = 0;
+        cartBoxes[0].position.width = '38%';
+        cartBoxes[0].position.right = undefined;
+        cartBoxes[1].position.left  = '38%';
+        cartBoxes[1].position.width = '38%';
+        cartBoxes[1].position.right = undefined;
+        savingsBox.style.border.fg = CHEAP_GREEN;
+        const savedStr = `$${savings.toFixed(2)}`;
+        savingsBox.setContent([
+          '',
+          `{center}{${CHEAP_GREEN}-fg}{bold}YOU SAVED{/}{/}`,
+          '',
+          `{center}{${CHEAP_GREEN}-fg}{bold}${savedStr}{/}{/}`,
+          '',
+          `{center}{#888888-fg}vs. the First Listing{/}`,
+        ].join('\n'));
+        savingsBox.show();
+      } else {
+        // 2-column layout
+        cartBoxes[0].position.left  = 0;
+        cartBoxes[0].position.width = '50%';
+        cartBoxes[0].position.right = undefined;
+        cartBoxes[1].position.left  = '50%';
+        cartBoxes[1].position.width = undefined;
+        cartBoxes[1].position.right = 1;
+        savingsBox.hide();
+      }
+    }
+
     function renderAll() {
+      renderSavingsBox();   // set column widths before cart boxes measure themselves
       for (let i = 0; i < 2; i++) renderCartBox(i);
       for (let c = 0; c < 2; c++) renderFilterBox(c);
       renderNotice();
