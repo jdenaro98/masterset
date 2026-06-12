@@ -133,21 +133,85 @@ async function run() {
           ui.muted(`Error fetching sets: ${e.message}`);
           continue;
         }
-        const setNames = Object.keys(setData);
 
-        ui.sectionClear();
-        const setChoice = await ui.showAutocomplete(setNames, `Game: ${gameName}`);
+        const allSetNames = Object.keys(setData);
+
+        // Run filter_sets, using disk cache when available; pass force=true to bypass.
+        async function doFilterSets(force) {
+          if (!force) {
+            const status = await ipc.call('check_filter_cache', { gameId });
+            if (status.cached) {
+              ui.sectionClear();
+              ui.header(`Game: ${gameName}`);
+              ui.muted('Loading cached set list…');
+              const res = await ipc.call('filter_sets', { gameId, sets: setData });
+              return res.sets;
+            }
+          }
+          ui.sectionClear();
+          const filterHandlers = ui.showFilterProgress(allSetNames.length);
+          filterProgressUpdater = filterHandlers.onComplete;
+          filterDebugUpdater    = filterHandlers.onDebug;
+          try {
+            const res = await ipc.call('filter_sets', { gameId, sets: setData, force: !!force });
+            return res.sets;
+          } catch (e) {
+            ui.muted(`Set probe failed, showing all: ${e.message}`);
+            return setData;
+          } finally {
+            filterProgressUpdater = null;
+            filterDebugUpdater    = null;
+          }
+        }
+
+        function showHiddenCount(filtered) {
+          const hidden = allSetNames.length - Object.keys(filtered).length;
+          if (hidden > 0) {
+            ui.muted(`  Showing ${Object.keys(filtered).length} sets (${hidden} hidden — no price data)`);
+          }
+        }
+
+        let filteredSetData = await doFilterSets(false);
+        showHiddenCount(filteredSetData);
+        if (allSetNames.length !== Object.keys(filteredSetData).length) {
+          await new Promise(r => setTimeout(r, 900));
+        }
+
+        // Set selection — refresh button re-probes and updates the cache.
+        let setChoice;
+        while (true) {
+          ui.sectionClear();
+          setChoice = await ui.showAutocomplete(
+            Object.keys(filteredSetData),
+            `Game: ${gameName}`,
+            { showRefreshBtn: true }
+          );
+          if (setChoice !== '__refresh__') break;
+          const confirmRefresh = await ui.showConfirm(
+            'Re-fetch set list from TCGPlayer?\nThis will update cached data.'
+          );
+          if (!confirmRefresh) continue;
+          filteredSetData = await doFilterSets(true);
+          showHiddenCount(filteredSetData);
+          if (allSetNames.length !== Object.keys(filteredSetData).length) {
+            await new Promise(r => setTimeout(r, 900));
+          }
+        }
         if (!setChoice) continue;
-        const setId   = setData[setChoice];
+        const setId   = filteredSetData[setChoice];
         const setName = setChoice;
 
         ui.sectionClear();
         ui.header(`Set: ${setName}`);
-        ui.muted('Fetching card list… (this may take a moment)');
+        ui.muted('Loading card list…');
 
         let cardData;
         try {
-          cardData = await ipc.call('fetch_cards', { setId, gameId });
+          const cardResult = await ipc.call('fetch_cards', { setId, gameId });
+          cardData = cardResult.cards;
+          if (cardResult.from_cache) {
+            ui.muted('  Loaded from cache.');
+          }
         } catch (e) {
           ui.muted(`Error fetching cards: ${e.message}`);
           continue;
@@ -183,7 +247,7 @@ async function run() {
 
         pendingSelections.push({ setName, cardNames: selectedCardNames, cardIds: selectedCardIds });
 
-        const addMore = await ui.showConfirm('Add cards from another set to optimise together?');
+        const addMore = await ui.showConfirm('Add cards from another set to optimize together?');
         if (!addMore) break;
       }
 
@@ -249,9 +313,9 @@ async function run() {
         })
         .filter(Boolean);
 
-      // ── initial optimisation (default filters) + available filter options ──
+      // ── initial optimization (default filters) + available filter options ──
       ui.sectionClear();
-      ui.muted('Optimising cart…');
+      ui.muted('Optimizing cart…');
 
       const DEFAULT_CONDITIONS = ['Near Mint', 'Lightly Played'];
       const DEFAULT_QUALS      = [];
@@ -266,7 +330,7 @@ async function run() {
         defaultCart      = defaultResult.cart;
         defaultOverrides = defaultResult.overrides || [];
       } catch (e) {
-        ui.muted(`Optimisation error: ${e.message}`);
+        ui.muted(`Optimization error: ${e.message}`);
         await new Promise(r => setTimeout(r, 2000));
         return;
       }
@@ -321,7 +385,11 @@ async function run() {
   // ── boot ───────────────────────────────────────────────────────────────
   ui.initScreen();
   ipc.spawnBackend();
-  ipc.on('backend_log', msg => debugLogUpdater ? debugLogUpdater(msg.text) : ui.muted(msg.text));
+  ipc.on('backend_log', msg => {
+    const handler = debugLogUpdater || filterDebugUpdater;
+    if (handler) handler(msg.text);
+    else ui.muted(msg.text);
+  });
 
   ui.header('Loading…');
   const theme = await ipc.call('get_theme', {});
@@ -329,13 +397,16 @@ async function run() {
   await ui.runSplash(theme.artContent, theme.primary, theme.pokemonName);
 
   // Register progress handlers once; closures update the active callback each run
-  let progressUpdater     = null;
-  let cardPageUpdater     = null;
-  let cartProgressUpdater = null;
-  let debugLogUpdater     = null;
-  ipc.on('progress',           msg => progressUpdater     && progressUpdater(msg.card));
-  ipc.on('card_page_progress', msg => cardPageUpdater     && cardPageUpdater(msg.card, msg.fetched));
-  ipc.on('cart_progress',      msg => cartProgressUpdater && cartProgressUpdater(msg.card));
+  let progressUpdater      = null;
+  let cardPageUpdater      = null;
+  let cartProgressUpdater  = null;
+  let debugLogUpdater      = null;
+  let filterProgressUpdater = null;
+  let filterDebugUpdater   = null;
+  ipc.on('progress',           msg => progressUpdater      && progressUpdater(msg.card));
+  ipc.on('card_page_progress', msg => cardPageUpdater      && cardPageUpdater(msg.card, msg.fetched));
+  ipc.on('cart_progress',      msg => cartProgressUpdater  && cartProgressUpdater(msg.card));
+  ipc.on('probe_progress',     msg => filterProgressUpdater && filterProgressUpdater(msg.set));
 
   // ── main screen loop ────────────────────────────────────────────────────
   while (true) {

@@ -125,6 +125,53 @@ _HEADERS = {
 
 _cached_card_data = {}
 
+# ── pre-query disk+memory cache ───────────────────────────────────────────────
+
+_CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
+_mem_cache: dict = {}
+
+
+def _cache_dir():
+    d = os.path.join(os.path.expanduser('~'), '.pokescraper', 'cache')
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _cache_file(key):
+    safe = key.replace(':', '__')
+    return os.path.join(_cache_dir(), f'{safe}.json')
+
+
+def _cache_get(key):
+    if key in _mem_cache:
+        return _mem_cache[key]
+    try:
+        with open(_cache_file(key), encoding='utf-8') as f:
+            entry = json.load(f)
+        if time.time() - entry['ts'] < _CACHE_TTL:
+            _mem_cache[key] = entry['val']
+            return entry['val']
+    except Exception:
+        pass
+    return None
+
+
+def _cache_set(key, value):
+    _mem_cache[key] = value
+    try:
+        with open(_cache_file(key), 'w', encoding='utf-8') as f:
+            json.dump({'ts': time.time(), 'val': value}, f)
+    except Exception:
+        pass
+
+
+def _cache_del(key):
+    _mem_cache.pop(key, None)
+    try:
+        os.remove(_cache_file(key))
+    except Exception:
+        pass
+
 # ── API handlers ──────────────────────────────────────────────────────────────
 
 
@@ -184,6 +231,24 @@ def handle_get_theme(params):
     }
 
 
+_EXCLUDED_CATEGORIES = {
+    "Books",
+    "Bulk Lots",
+    "Chrono Clash System",
+    "Funko",
+    "Card Sleeves",
+    "Card Storage Tins",
+    "Collectible Storage",
+    "Deck Boxes",
+    "Life Counters",
+    "Playmats",
+    "Protective Pages",
+    "Storage Albums",
+    "Supply Bundles",
+    "TCGplayer Supplies",
+}
+
+
 def handle_fetch_categories(params):
     url = "https://mp-search-api.tcgplayer.com/v1/search/productLines"
     with sync_playwright() as p:
@@ -194,7 +259,9 @@ def handle_fetch_categories(params):
         data = r.json()
     games = {}
     for item in data:
-        games[item.get("productLineName")] = item.get("productLineId")
+        name = item.get("productLineName")
+        if name not in _EXCLUDED_CATEGORIES:
+            games[name] = item.get("productLineId")
     return dict(sorted(games.items()))
 
 
@@ -224,8 +291,101 @@ def handle_fetch_sets(params):
                 raise
 
 
+def _probe_set_has_cards(set_id, pd_id):
+    """Return True if the priceguide endpoint returns at least one card for the set."""
+    url = (
+        f"https://infinite-api.tcgplayer.com/priceguide/set/{set_id}"
+        f"/cards/?rows=1&productTypeID={pd_id}"
+    )
+    try:
+        r = requests.get(url, headers=_HEADERS, timeout=10)
+        if not r.ok:
+            return False
+        data = r.json()
+        results = data.get("result", data.get("results", data)) if isinstance(data, dict) else data
+        return bool(results) if isinstance(results, list) else False
+    except Exception:
+        return False
+
+
+def handle_check_filter_cache(params):
+    """Return whether a valid filter_sets cache entry exists for this game."""
+    game_id = params["gameId"]
+    cached = _cache_get(f"filter_sets:{game_id}")
+    return {"cached": cached is not None}
+
+
+def handle_filter_sets(params):
+    """
+    Probe each set in parallel (rows=1) to check for price guide data.
+    Returns {sets: {...}, from_cache: bool}; falls back to all sets
+    if the Cards product type ID cannot be determined or no sets pass.
+    Accepts force=True to bypass and refresh the cache.
+    """
+    game_id = params["gameId"]
+    sets    = params["sets"]   # {name: setId}
+    force   = params.get("force", False)
+
+    if not sets:
+        return {"sets": sets, "from_cache": False}
+
+    cache_key = f"filter_sets:{game_id}"
+
+    if not force:
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            _log(f"filter_sets: cache hit for game {game_id}")
+            return {"sets": cached, "from_cache": True}
+    else:
+        _cache_del(cache_key)
+
+    pdurl = f"https://mpapi.tcgplayer.com/v2/Product/ProductTypes/{game_id}/?mpfev=5154"
+    pd_id = None
+    with sync_playwright() as p:
+        ctx = p.request.new_context()
+        r = ctx.get(pdurl, headers=_HEADERS)
+        data = r.json()
+        if isinstance(data, dict):
+            pd_id = next(
+                (i.get("productTypeId") for i in data.get("results", [])
+                 if i.get("productName") == "Cards"),
+                None,
+            )
+
+    if pd_id is None:
+        return {"sets": sets, "from_cache": False}
+
+    total = len(sets)
+    _log(f"Probing {total} sets for game {game_id} (pd_id={pd_id})…")
+
+    filtered = {}
+    done = 0
+    max_workers = min(50, total)
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(_probe_set_has_cards, sid, pd_id): name for name, sid in sets.items()}
+        for future in as_completed(futures):
+            name = futures[future]
+            has_cards = future.result()
+            done += 1
+            _send({"type": "probe_progress", "done": done, "total": total, "set": name})
+            if has_cards:
+                filtered[name] = sets[name]
+
+    result = filtered if filtered else sets
+    _log(f"  {len(result)}/{total} sets have price data")
+    _cache_set(cache_key, result)
+    return {"sets": result, "from_cache": False}
+
+
 def handle_fetch_cards(params):
     set_id, game_id = params["setId"], params["gameId"]
+
+    cache_key = f"fetch_cards:{game_id}:{set_id}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        _log(f"fetch_cards: cache hit for set {set_id}")
+        return {"cards": cached, "from_cache": True}
+
     pdurl = f"https://mpapi.tcgplayer.com/v2/Product/ProductTypes/{game_id}/?mpfev=5154"
     with sync_playwright() as p:
         ctx = p.request.new_context()
@@ -239,14 +399,14 @@ def handle_fetch_cards(params):
                 None,
             )
         if pd_id is None:
-            return []
+            return {"cards": {}, "from_cache": False}
         url = (
             f"https://infinite-api.tcgplayer.com/priceguide/set/{set_id}"
             f"/cards/?rows=5000&productTypeID={pd_id}"
         )
         r = ctx.get(url, headers=_HEADERS)
         if not r.ok:
-            return []
+            return {"cards": {}, "from_cache": False}
         data = r.json()
         results = data.get("result", data.get("results", data)) if isinstance(data, dict) else data
 
@@ -276,7 +436,9 @@ def handle_fetch_cards(params):
                 out[f"{name} ({printing})"] = {"productId": pid, "printing": printing, "number": number}
         else:
             out[name] = {"productId": pid, "printing": next(iter(printings), None), "number": number}
-    return out
+
+    _cache_set(cache_key, out)
+    return {"cards": out, "from_cache": False}
 
 
 _MAX_RETRIES = 4
@@ -419,8 +581,8 @@ _QUAL_CHECKS = {
 
 def _apply_filters(listings, conditions, seller_quals):
     """
-    Conditions: OR (Near Mint OR Damaged → either is acceptable).
-    Seller quals: AND (Gold Star AND WPN → seller must hold both).
+    Conditions: OR (e.g. Near Mint OR Damaged → either is acceptable).
+    Seller quals: AND (e.g. Gold Star AND WPN → seller must hold both).
     Across the two categories: AND.
     Empty list for a category = no filter on that category (all listings pass).
     """
@@ -634,17 +796,19 @@ def handle_dump_listings(params):
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
-    "get_theme":           handle_get_theme,
-    "fetch_categories":    handle_fetch_categories,
-    "fetch_sets":          handle_fetch_sets,
-    "fetch_cards":         handle_fetch_cards,
-    "fetch_listings":      handle_fetch_listings,
-    "optimize":            handle_optimize,
-    "optimize_filtered":   handle_optimize_filtered,
-    "get_filter_options":  handle_get_filter_options,
-    "create_cart":         handle_create_cart,
-    "close_browser":       handle_close_browser,
-    "dump_listings":       handle_dump_listings,
+    "get_theme":              handle_get_theme,
+    "fetch_categories":       handle_fetch_categories,
+    "fetch_sets":             handle_fetch_sets,
+    "check_filter_cache":     handle_check_filter_cache,
+    "filter_sets":            handle_filter_sets,
+    "fetch_cards":            handle_fetch_cards,
+    "fetch_listings":         handle_fetch_listings,
+    "optimize":               handle_optimize,
+    "optimize_filtered":      handle_optimize_filtered,
+    "get_filter_options":     handle_get_filter_options,
+    "create_cart":            handle_create_cart,
+    "close_browser":          handle_close_browser,
+    "dump_listings":          handle_dump_listings,
 }
 
 # ── main loop ─────────────────────────────────────────────────────────────────

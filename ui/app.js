@@ -959,12 +959,24 @@ function showMultiSelect(items, promptText, opts = {}) {
 
 // ── autocomplete (set selection) ───────────────────────────────────────────
 
-function showAutocomplete(choices, promptText) {
+function showAutocomplete(choices, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
+    if (opts.showRefreshBtn) {
+      // Shorten hint to leave room for the refresh button on the right
+      const h = blessed.text({
+        parent: outerBox,
+        top: 1, left: 1, right: 17, height: 1,
+        content: '{#888888-fg}  Type to filter   ↑/↓ or TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back{/}',
+        style: { bg: '#000000' },
+        tags: true,
+      });
+      activeHints.push(h);
+    } else {
+      hintWidget('  Type to filter   ↑/↓ or TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
+    }
 
     let filtered = [...choices];
     let destroyed = false;
@@ -974,10 +986,34 @@ function showAutocomplete(choices, promptText) {
     function cleanupAndResolve(value) {
       destroyed = true;
       km.cleanup();
+      screen.removeListener('wheeldown', onWheelDown);
+      screen.removeListener('wheelup',   onWheelUp);
       inputBox.destroy();
       dropList.destroy();
       activeWidget = null;
       resolve(value);
+    }
+
+    if (opts.showRefreshBtn) {
+      const refreshBtn = blessed.box({
+        parent: outerBox,
+        top: 1, right: 2, width: 14, height: 1,
+        content: '{#888888-fg}[ ↻ Refresh ]{/}',
+        tags: true,
+        mouse: true,
+        clickable: true,
+        style: { bg: '#000000' },
+      });
+      activeHints.push(refreshBtn);
+      refreshBtn.on('mouseover', () => {
+        refreshBtn.setContent('{#000000-fg}{#ffffff-bg}[ ↻ Refresh ]{/}');
+        screen.render();
+      });
+      refreshBtn.on('mouseout', () => {
+        refreshBtn.setContent('{#888888-fg}[ ↻ Refresh ]{/}');
+        screen.render();
+      });
+      refreshBtn.on('click', () => cleanupAndResolve('__refresh__'));
     }
 
     const inputBox = blessed.textbox({
@@ -992,7 +1028,7 @@ function showAutocomplete(choices, promptText) {
       top: 4, left: 1, right: 1, bottom: 2,
       keys:         true,
       vi:           true,
-      mouse:        true,
+      mouse:        false,
       scrollable:   true,
       alwaysScroll: true,
       scrollbar: { ch: '│', track: { ch: ' ' } },
@@ -1004,6 +1040,11 @@ function showAutocomplete(choices, promptText) {
       },
       tags: false,
     });
+
+    const onWheelDown = () => { dropList.scroll(3);  screen.render(); };
+    const onWheelUp   = () => { dropList.scroll(-3); screen.render(); };
+    screen.on('wheeldown', onWheelDown);
+    screen.on('wheelup',   onWheelUp);
 
     function flashInvalidInput() {
       if (flashTimer) return;
@@ -1054,7 +1095,8 @@ function showAutocomplete(choices, promptText) {
     inputBox.key('tab',   () => cycleSelection(+1));
     inputBox.key('S-tab', () => cycleSelection(-1));
 
-    inputBox.key('down', () => dropList.focus());
+    inputBox.key('up',   () => cycleSelection(-1));
+    inputBox.key('down', () => cycleSelection(+1));
 
     inputBox.key('pageup', () => {
       dropList.scroll(-Math.max(1, dropList.height));
@@ -1262,6 +1304,97 @@ function showProgress(total) {
   }
 
   return { onComplete, onPage, onDebug };
+}
+
+// ── progress bar (set probing) ────────────────────────────────────────────
+
+function showFilterProgress(total) {
+  sectionClear();
+  logBox.hide();
+
+  const headerWidget = blessed.text({
+    parent: outerBox,
+    top: 1, left: 1, right: 1, height: 1,
+    content: `{bold}{${PRIMARY}-fg}Probing sets for price data…{/}`,
+    style: { bg: '#000000' },
+    tags: true,
+  });
+  progressWidgets.push(headerWidget);
+
+  const barTrack = blessed.box({
+    parent: outerBox,
+    top: 3, left: 1, right: 1, height: 1,
+    style: { bg: '#111111' },
+  });
+  progressWidgets.push(barTrack);
+
+  const barFill = blessed.box({
+    parent: barTrack,
+    top: 0, left: 0, width: 0, height: 1,
+    style: { bg: PRIMARY },
+  });
+
+  const statusRowBg = blessed.box({
+    parent: outerBox,
+    top: 5, left: 1, right: 1, height: 1,
+    style: { bg: '#000000' },
+  });
+  progressWidgets.push(statusRowBg);
+
+  const statusText = blessed.text({
+    parent: outerBox,
+    top: 5, left: 2,
+    content: '',
+    style: { fg: SECONDARY },
+    tags: true,
+  });
+  progressWidgets.push(statusText);
+
+  const pctText = blessed.text({
+    parent: outerBox,
+    top: 5, right: 2,
+    content: '',
+    style: { fg: SECONDARY },
+    tags: true,
+  });
+  progressWidgets.push(pctText);
+
+  const debugSep = blessed.text({
+    parent: outerBox,
+    top: 7, left: 1, right: 1, height: 1,
+    content: `{#333333-fg}${'─'.repeat(80)}{/}`,
+    style: { bg: '#000000' },
+    tags: true,
+  });
+  progressWidgets.push(debugSep);
+
+  const debugLog = blessed.log({
+    parent: outerBox,
+    top: 8, left: 1, right: 1, bottom: 1,
+    scrollable: true,
+    alwaysScroll: true,
+    tags: true,
+    style: { fg: '#888888' },
+  });
+  progressWidgets.push(debugLog);
+
+  let done = 0;
+
+  function onComplete(setName) {
+    done++;
+    const pct = Math.round((done / total) * 100);
+    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
+    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(setName)}{/}`);
+    pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
+    screen.render();
+  }
+
+  function onDebug(text) {
+    debugLog.log(`{#888888-fg}${escape(text)}{/}`);
+    screen.render();
+  }
+
+  return { onComplete, onDebug };
 }
 
 // ── progress bar (cart creation) ──────────────────────────────────────────
@@ -2158,6 +2291,7 @@ module.exports = {
   showTextInput,
   showFilePicker,
   showProgress,
+  showFilterProgress,
   showCartProgress,
   showCartComparison,
   showCartResult,

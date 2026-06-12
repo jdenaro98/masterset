@@ -71,8 +71,9 @@ Navigate to the release page and install the most recent release for your applic
         - Or Terminal -> New Terminal
     3. Assuming you have python installed, it will automatically open the virtual environment (venv), just give it a second
     4. ```python install -r requirements.txt``` to install python dependencies
-    5. ```npm install``` to install node dependencies
-    6. ```npm start``` to run masterset_tool app
+    5. ```playwright install``` installs playwright (required to add to a cart)
+    6. ```npm install``` to install node dependencies
+    7. ```npm start``` to run masterset_tool app
 
 - CLI
     1. Clone the repo using ```git clone https://github.com/jdenaro98/masterset_tool.git```
@@ -82,5 +83,6 @@ Navigate to the release page and install the most recent release for your applic
         - (Mac) source venv/bin/activate
         - (Win) venv/scripts/activate\
     5. ```python install -r requirements.txt``` to install python dependencies
-    6. ```npm install``` to install node dependencies (must already have node installed on system)
-    7. ```npm start``` to run masterset_tool app
+    6. ```playwright install``` installs playwright (required to add to a cart)
+    7. ```npm install``` to install node dependencies (must already have node installed on system)
+    8. ```npm start``` to run masterset_tool app
