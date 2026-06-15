@@ -317,14 +317,14 @@ async function run() {
       ui.sectionClear();
       ui.muted('Optimizing cart…');
 
-      const DEFAULT_CONDITIONS = ['Near Mint', 'Lightly Played'];
-      const DEFAULT_QUALS      = [];
+      let activeConditions = ['Near Mint', 'Lightly Played'];
+      const DEFAULT_QUALS  = [];
 
       let defaultCart, filterOptions, defaultOverrides = [];
       try {
         let defaultResult;
         [defaultResult, filterOptions] = await Promise.all([
-          ipc.call('optimize_filtered', { conditions: DEFAULT_CONDITIONS, sellerQuals: DEFAULT_QUALS }),
+          ipc.call('optimize_filtered', { conditions: activeConditions, sellerQuals: DEFAULT_QUALS }),
           ipc.call('get_filter_options', {}),
         ]);
         defaultCart      = defaultResult.cart;
@@ -335,10 +335,30 @@ async function run() {
         return;
       }
 
+      // ── pre-open filter fallback: widen conditions if dynamic isn't cheaper ──
+      // Tries LP-only, then no-filter, before showing the screen.
+      {
+        const firstTotal   = ui.buildSummary(firstListingCart).total;
+        const defaultTotal = ui.buildSummary(defaultCart).total;
+
+        if (defaultTotal >= firstTotal) {
+          const fallbacks = [['Lightly Played'], []];
+          for (const conds of fallbacks) {
+            try {
+              const r = await ipc.call('optimize_filtered', { conditions: conds, sellerQuals: DEFAULT_QUALS });
+              activeConditions = conds;
+              defaultCart      = r.cart;
+              defaultOverrides = r.overrides || [];
+              if (ui.buildSummary(defaultCart).total < firstTotal) break;
+            } catch (_) { break; }
+          }
+        }
+      }
+
       // ── dynamic optimizer screen ────────────────────────────────────
       const dynamicResult = await ui.showDynamicOptimizer(
         firstListingCart, defaultCart, filterOptions,
-        { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS },
+        { conditions: activeConditions, quals: DEFAULT_QUALS },
         {
           totalCards: Object.keys(allCardData).length,
           initialOverrides: defaultOverrides,
