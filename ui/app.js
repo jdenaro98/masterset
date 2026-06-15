@@ -1618,7 +1618,7 @@ function showTextInput(promptText, defaultVal = '') {
 
 function showWelcome() {
   const w         = Math.max(10, (screen.cols || screen.width || 80) - 3);
-  const title     = 'Welcome to TCGScraper!';
+  const title     = 'Welcome to masterset!';
   const pad       = Math.max(0, Math.floor((w - title.length) / 2));
   const separator = '='.repeat(w);
   header(separator);
@@ -1688,6 +1688,7 @@ function showFilePicker(mode, defaultFilePath) {
 
 function showMainScreen() {
   return new Promise(resolve => {
+    process.stdout.write('\x1b]9999;bmc=show\x07');
     sectionClear();
     logBox.hide();
 
@@ -1731,6 +1732,7 @@ function showMainScreen() {
     const km    = makeKeyManager();
 
     function done(value) {
+      process.stdout.write('\x1b]9999;bmc=hide\x07');
       km.cleanup();
       try { welcomeWidget.destroy();  } catch (_) {}
       try { iconBox.destroy();        } catch (_) {}
@@ -1806,7 +1808,7 @@ function showMainScreen() {
     });
 
     // Welcome banner — top of screen, inside border
-    const welcomeText = 'Welcome to MasterSet Helper';
+    const welcomeText = 'Welcome to masterset!';
     const wPad = Math.max(0, Math.floor((screenW - welcomeText.length) / 2));
     const welcomeWidget = blessed.text({
       parent:  outerBox,

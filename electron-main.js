@@ -19,6 +19,8 @@ const NODE_BIN = resolveNodeBin();
 
 let win, ptyProcess;
 
+app.setName('masterset');
+
 if (app.dock) {
   app.dock.setIcon(path.join(__dirname, 'build', 'icons', 'png', '512x512.png'));
 }
@@ -29,7 +31,7 @@ app.whenReady().then(() => {
     height:          860,
     backgroundColor: '#000000',
     autoHideMenuBar: true,
-    title:           'TCGScraper',
+    title:           'masterset',
     icon:            path.join(__dirname, 'build', 'icons', 'png', '512x512.png'),
     webPreferences: {
       nodeIntegration:  true,

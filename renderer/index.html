@@ -8,12 +8,39 @@
     html, body { width: 100%; height: 100%; background: #000000; overflow: hidden; }
     #terminal { width: 100%; height: 100%; }
     .xterm-viewport { overflow-y: hidden !important; }
+    #bmc-btn {
+      display: none;
+      position: fixed;
+      bottom: 18px;
+      left: 18px;
+      z-index: 9999;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #FFDD00;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      transition: transform 0.15s ease;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+    #bmc-btn:hover { transform: scale(1.08); }
+    #bmc-btn img { width: 32px; height: 32px; display: block; }
   </style>
 </head>
 <body>
   <div id="terminal"></div>
+  <button id="bmc-btn" title="Buy me a coffee!">
+    <img src="https://cdn.buymeacoffee.com/buttons/bmc-new-btn-logo.svg" alt="Buy Me A Coffee">
+  </button>
   <script>
-    const { ipcRenderer } = require('electron');
+    const { ipcRenderer, shell } = require('electron');
+    const bmcBtn = document.getElementById('bmc-btn');
+    bmcBtn.addEventListener('click', () => {
+      shell.openExternal('https://buymeacoffee.com/jdenaro');
+    });
     const { Terminal }    = require('xterm');
     const { FitAddon }    = require('xterm-addon-fit');
 
@@ -52,7 +79,15 @@
 
 
     // Wire up PTY I/O immediately — data can start flowing before the window resize
-    ipcRenderer.on('pty-data', (_, data) => term.write(data));
+    ipcRenderer.on('pty-data', (_, data) => {
+      if (data.includes('\x1b]9999;bmc=')) {
+        if (data.includes('bmc=show')) bmcBtn.style.display = 'flex';
+        if (data.includes('bmc=hide')) bmcBtn.style.display = 'none';
+        data = data.replace(/\x1b\]9999;bmc=[a-z]+\x07/g, '');
+        if (!data) return;
+      }
+      term.write(data);
+    });
     term.onData(data => ipcRenderer.send('pty-input', data));
     // onBinary handles DEFAULT-encoded mouse events (fallback if SGR mode isn't negotiated)
     term.onBinary(data => ipcRenderer.send('pty-input', data));
@@ -72,6 +107,7 @@
       // After this point, let FitAddon adapt the terminal to any user-driven window resizes
       const ro = new ResizeObserver(() => fitAddon.fit());
       ro.observe(document.getElementById('terminal'));
+
     }));
   </script>
 </body>
