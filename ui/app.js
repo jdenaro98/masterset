@@ -4,7 +4,7 @@ const blessed      = require('blessed');
 const { spawn }    = require('child_process');
 const fs           = require('fs');
 const path         = require('path');
-const { spawnBackend, call, on: onEvent } = require('./ipc');
+const { call } = require('./ipc');
 
 // ── screen & outer border ──────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ function initScreen() {
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
-    title:       'TCGScraper',
+    title:       'masterset',
   });
 
   screen.enableMouse();
@@ -291,107 +291,35 @@ function makeKeyManager() {
   };
 }
 
-// ── 3-column grid select ───────────────────────────────────────────────────
+// ── invalid-input flash helper ────────────────────────────────────────────
 
-function showGridSelect(items, promptText, opts = {}) {
-  return new Promise(resolve => {
-    sectionClear();
-    logBox.hide();
-    hintWidget(promptText, 0, '#cccccc');
-
-    const COLS = opts.cols || 3;
-    const rows = Math.ceil(items.length / COLS);
-    let curRow = 0, curCol = 0;
-    const km = makeKeyManager();
-
-    function cleanupAndResolve(value) {
-      km.cleanup();
-      gridBox.destroy();
-      activeWidget = null;
-      resolve(value);
-    }
-
-    const gridBox = blessed.box({
-      parent:       outerBox,
-      top: 2, left: 1, right: 1, bottom: 2,
-      scrollable:   true,
-      alwaysScroll: true,
-      keys:         true,
-      tags:         true,
-      scrollbar: { ch: '│', style: { fg: PRIMARY } },
+function _makeFlashInvalid(inputBox, isDestroyed) {
+  let flashTimer = null;
+  return function flashInvalidInput() {
+    if (flashTimer) return;
+    const origBg = inputBox.style.bg;
+    const origFg = inputBox.style.fg;
+    inputBox.style.bg = '#550000';
+    inputBox.style.fg = '#ff6666';
+    const warn = blessed.text({
+      parent: outerBox,
+      top: 2, left: 1, right: 1, height: 1,
+      content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
+      style: { bg: '#000000' },
+      tags: true,
     });
-
-    function render() {
-      const w        = Math.max(30, (screen.width || 120) - 6);
-      const colWidth = Math.floor(w / COLS);
-      const maxText  = Math.max(4, colWidth - 2);
-      const lines    = [];
-
-      for (let r = 0; r < rows; r++) {
-        let line = '';
-        for (let c = 0; c < COLS; c++) {
-          const idx  = c * rows + r;
-          if (idx >= items.length) {
-            line += ' '.repeat(colWidth);
-            continue;
-          }
-          const name  = items[idx];
-          const isCur = (r === curRow && c === curCol);
-          const cell  = name.length > maxText
-            ? name.substring(0, maxText - 1) + '…'
-            : name.padEnd(maxText);
-          line += isCur
-            ? `{#ffffff-bg}{#000000-fg} ${escape(cell)} {/}`
-            : `{${SECONDARY}-fg} ${escape(cell)} {/}`;
-        }
-        lines.push(line);
-      }
-      gridBox.setContent(lines.join('\n'));
-
-      const visH = Math.max(1, gridBox.height);
-      const base = gridBox.childBase || 0;
-      if (curRow >= base + visH) gridBox.scrollTo(curRow - visH + 1);
-      else if (curRow < base)    gridBox.scrollTo(curRow);
-
+    screen.render();
+    inputBox.focus();
+    flashTimer = setTimeout(() => {
+      flashTimer = null;
+      if (isDestroyed()) return;
+      inputBox.style.bg = origBg;
+      inputBox.style.fg = origFg;
+      try { warn.destroy(); } catch (_) {}
       screen.render();
-    }
-
-    function clampCol() {
-      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
-      if (curCol > maxCol) curCol = maxCol;
-    }
-
-    gridBox.key('up',       () => { if (curRow > 0) { curRow--; clampCol(); render(); } });
-    gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
-    gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
-    gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
-      if (curCol < maxCol) { curCol++; render(); }
-    });
-    gridBox.key('pageup',   () => {
-      curRow = Math.max(0, curRow - Math.max(1, gridBox.height));
-      clampCol(); render();
-    });
-    gridBox.key('pagedown', () => {
-      curRow = Math.min(rows - 1, curRow + Math.max(1, gridBox.height));
-      clampCol(); render();
-    });
-    gridBox.key(['enter', 'return'], () => {
-      const idx = curCol * rows + curRow;
-      if (idx < items.length) cleanupAndResolve(items[idx]);
-    });
-
-    km.add('escape', () => cleanupAndResolve(null));
-    if (opts.extraKeys) {
-      for (const [key, val] of Object.entries(opts.extraKeys)) {
-        km.add(key, () => cleanupAndResolve(val));
-      }
-    }
-
-    gridBox.focus();
-    activeWidget = gridBox;
-    render();
-  });
+      inputBox.focus();
+    }, 900);
+  };
 }
 
 // ── 3-column grid select with search bar ──────────────────────────────────
@@ -409,7 +337,6 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
     let listCursor = 0;
     let curRow = 0, curCol = 0;
     let destroyed = false;
-    let flashTimer = null;
     const km = makeKeyManager();
 
     function cleanupAndResolve(value) {
@@ -427,6 +354,8 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
       style: { fg: PRIMARY, bg: '#000000' },
       inputOnFocus: true,
     });
+
+    const flashInvalidInput = _makeFlashInvalid(inputBox, () => destroyed);
 
     const contentBox = blessed.box({
       parent:       outerBox,
@@ -506,32 +435,6 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
     function render() {
       if (query.length > 0) renderList();
       else renderGrid();
-    }
-
-    function flashInvalidInput() {
-      if (flashTimer) return;
-      const origBg = inputBox.style.bg;
-      const origFg = inputBox.style.fg;
-      inputBox.style.bg = '#550000';
-      inputBox.style.fg = '#ff6666';
-      const warn = blessed.text({
-        parent: outerBox,
-        top: 2, left: 1, right: 1, height: 1,
-        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
-        style: { bg: '#000000' },
-        tags: true,
-      });
-      screen.render();
-      inputBox.focus();
-      flashTimer = setTimeout(() => {
-        flashTimer = null;
-        if (destroyed) return;
-        inputBox.style.bg = origBg;
-        inputBox.style.fg = origFg;
-        try { warn.destroy(); } catch (_) {}
-        screen.render();
-        inputBox.focus();
-      }, 900);
     }
 
     function updateQuery() {
@@ -980,7 +883,6 @@ function showAutocomplete(choices, promptText, opts = {}) {
 
     let filtered = [...choices];
     let destroyed = false;
-    let flashTimer = null;
     const km = makeKeyManager();
 
     function cleanupAndResolve(value) {
@@ -1046,31 +948,7 @@ function showAutocomplete(choices, promptText, opts = {}) {
     screen.on('wheeldown', onWheelDown);
     screen.on('wheelup',   onWheelUp);
 
-    function flashInvalidInput() {
-      if (flashTimer) return;
-      const origBg = inputBox.style.bg;
-      const origFg = inputBox.style.fg;
-      inputBox.style.bg = '#550000';
-      inputBox.style.fg = '#ff6666';
-      const warn = blessed.text({
-        parent: outerBox,
-        top: 2, left: 1, right: 1, height: 1,
-        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
-        style: { bg: '#000000' },
-        tags: true,
-      });
-      screen.render();
-      inputBox.focus();
-      flashTimer = setTimeout(() => {
-        flashTimer = null;
-        if (destroyed) return;
-        inputBox.style.bg = origBg;
-        inputBox.style.fg = origFg;
-        try { warn.destroy(); } catch (_) {}
-        screen.render();
-        inputBox.focus();
-      }, 900);
-    }
+    const flashInvalidInput = _makeFlashInvalid(inputBox, () => destroyed);
 
     function refresh(val) {
       filtered = choices.filter(c => c.toLowerCase().includes(val.toLowerCase()));
@@ -1208,20 +1086,19 @@ function showConfirm(question) {
   });
 }
 
-// ── progress bar (scraping) ────────────────────────────────────────────────
+// ── progress bar shared factory ────────────────────────────────────────────
 
-function showProgress(total) {
+function _makeProgressScreen(total, headerText) {
   sectionClear();
   logBox.hide();
 
-  const headerWidget = blessed.text({
+  progressWidgets.push(blessed.text({
     parent: outerBox,
     top: 1, left: 1, right: 1, height: 1,
-    content: `{bold}{${PRIMARY}-fg}Scraping card listings…{/}`,
+    content: `{bold}{${PRIMARY}-fg}${escape(headerText)}{/}`,
     style: { bg: '#000000' },
     tags: true,
-  });
-  progressWidgets.push(headerWidget);
+  }));
 
   const barTrack = blessed.box({
     parent: outerBox,
@@ -1262,15 +1139,13 @@ function showProgress(total) {
   });
   progressWidgets.push(pctText);
 
-  // Separator and scrollable debug log area below the progress widgets
-  const debugSep = blessed.text({
+  progressWidgets.push(blessed.text({
     parent: outerBox,
     top: 7, left: 1, right: 1, height: 1,
     content: `{#333333-fg}${'─'.repeat(80)}{/}`,
     style: { bg: '#000000' },
     tags: true,
-  });
-  progressWidgets.push(debugSep);
+  }));
 
   const debugLog = blessed.log({
     parent: outerBox,
@@ -1284,17 +1159,12 @@ function showProgress(total) {
 
   let done = 0;
 
-  function onComplete(cardName) {
+  function onComplete(label) {
     done++;
     const pct = Math.round((done / total) * 100);
     barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
-    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
+    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(label)}{/}`);
     pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
-    screen.render();
-  }
-
-  function onPage(cardName, count) {
-    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)} [${count}]{/}`);
     screen.render();
   }
 
@@ -1303,98 +1173,25 @@ function showProgress(total) {
     screen.render();
   }
 
-  return { onComplete, onPage, onDebug };
+  return { barTrack, statusText, getDone: () => done, onComplete, onDebug };
+}
+
+// ── progress bar (scraping) ────────────────────────────────────────────────
+
+function showProgress(total) {
+  const pb = _makeProgressScreen(total, 'Scraping card listings…');
+  function onPage(cardName, count) {
+    pb.statusText.setContent(`{${SECONDARY}-fg}[${pb.getDone()}/${total}] ${escape(cardName)} [${count}]{/}`);
+    screen.render();
+  }
+  return { onComplete: pb.onComplete, onPage, onDebug: pb.onDebug };
 }
 
 // ── progress bar (set probing) ────────────────────────────────────────────
 
 function showFilterProgress(total) {
-  sectionClear();
-  logBox.hide();
-
-  const headerWidget = blessed.text({
-    parent: outerBox,
-    top: 1, left: 1, right: 1, height: 1,
-    content: `{bold}{${PRIMARY}-fg}Probing sets for price data…{/}`,
-    style: { bg: '#000000' },
-    tags: true,
-  });
-  progressWidgets.push(headerWidget);
-
-  const barTrack = blessed.box({
-    parent: outerBox,
-    top: 3, left: 1, right: 1, height: 1,
-    style: { bg: '#111111' },
-  });
-  progressWidgets.push(barTrack);
-
-  const barFill = blessed.box({
-    parent: barTrack,
-    top: 0, left: 0, width: 0, height: 1,
-    style: { bg: PRIMARY },
-  });
-
-  const statusRowBg = blessed.box({
-    parent: outerBox,
-    top: 5, left: 1, right: 1, height: 1,
-    style: { bg: '#000000' },
-  });
-  progressWidgets.push(statusRowBg);
-
-  const statusText = blessed.text({
-    parent: outerBox,
-    top: 5, left: 2,
-    content: '',
-    style: { fg: SECONDARY },
-    tags: true,
-  });
-  progressWidgets.push(statusText);
-
-  const pctText = blessed.text({
-    parent: outerBox,
-    top: 5, right: 2,
-    content: '',
-    style: { fg: SECONDARY },
-    tags: true,
-  });
-  progressWidgets.push(pctText);
-
-  const debugSep = blessed.text({
-    parent: outerBox,
-    top: 7, left: 1, right: 1, height: 1,
-    content: `{#333333-fg}${'─'.repeat(80)}{/}`,
-    style: { bg: '#000000' },
-    tags: true,
-  });
-  progressWidgets.push(debugSep);
-
-  const debugLog = blessed.log({
-    parent: outerBox,
-    top: 8, left: 1, right: 1, bottom: 1,
-    scrollable: true,
-    alwaysScroll: true,
-    tags: true,
-    style: { fg: '#888888' },
-  });
-  progressWidgets.push(debugLog);
-
-  let done = 0;
-
-  function onComplete(setName) {
-    done++;
-    const pct = Math.round((done / total) * 100);
-    barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
-    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(setName)}{/}`);
-    pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
-    screen.render();
-  }
-
-  function onDebug(text) {
-    debugLog.log(`{#888888-fg}${escape(text)}{/}`);
-    screen.render();
-  }
-
-  return { onComplete, onDebug };
+  const pb = _makeProgressScreen(total, 'Probing sets for price data…');
+  return { onComplete: pb.onComplete, onDebug: pb.onDebug };
 }
 
 // ── progress bar (cart creation) ──────────────────────────────────────────
@@ -1468,47 +1265,6 @@ function showCartProgress(total, summaryInfo) {
     pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
     screen.render();
   };
-}
-
-// ── side-by-side summary comparison ───────────────────────────────────────
-
-function showCartComparison(first, optimized) {
-  sectionClear();
-
-  const w    = Math.max(60, (screen.width || 120) - 4);
-  const half = Math.floor(w / 2) - 1;
-  const div  = ' │ ';
-
-  const leftLines = [
-    'FIRST LISTING',
-    `  Cards requested:   ${first.cards}`,
-    `  Unique sellers:    ${first.sellers}`,
-    `  Subtotal:          $${first.rawCost.toFixed(2)}`,
-    `  Shipping:          $${first.shipping.toFixed(2)}`,
-    `  Estimated total:   $${first.total.toFixed(2)}`,
-  ];
-  const rightLines = [
-    'OPTIMIZED CART',
-    `  Cards requested:   ${optimized.cards}`,
-    `  Unique sellers:    ${optimized.sellers}`,
-    `  Subtotal:          $${optimized.rawCost.toFixed(2)}`,
-    `  Shipping:          $${optimized.shipping.toFixed(2)}`,
-    `  Estimated total:   $${optimized.total.toFixed(2)}`,
-  ];
-
-  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-  for (let i = 0; i < leftLines.length; i++) {
-    const l = leftLines[i].padEnd(half);
-    const r = rightLines[i] || '';
-    if (i === 0) {
-      logBox.log(`{bold}{${SECONDARY}-fg}${escape(l)}{/}${div}{bold}{${PRIMARY}-fg}${escape(r)}{/}`);
-    } else {
-      logBox.log(`{${SECONDARY}-fg}${escape(l)}{/}${div}{${PRIMARY}-fg}${escape(r)}{/}`);
-    }
-  }
-  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-  logBox.log('');
-  screen.render();
 }
 
 // ── cart result display ────────────────────────────────────────────────────
@@ -1921,6 +1677,8 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     const totalCards     = extra.totalCards ?? firstCart.length;
     let userCart         = defaultCart;
     let currentOverrides = extra.initialOverrides || [];
+    const backendLogs    = [];
+    if (extra.onLog) extra.onLog(text => { backendLogs.push(text); renderNotice(); });
     let isCalc           = false;
     let debounceId       = null;
     let spinnerTimer     = null;
@@ -2187,14 +1945,24 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // ── render: notice box ─────────────────────────────────────────────
     function renderNotice() {
-      if (!currentOverrides.length) {
-        noticeBox.setContent('');
-        noticeBox.style.border.fg = '#444444';
-      } else {
+      const lines = [];
+      if (currentOverrides.length) {
         noticeBox.style.border.fg = '#ff9955';
-        const lines = currentOverrides.map(o =>
-          `{#ffaa55-fg}⚠ ${escape(o.name)}:{/} {#888888-fg}${escape(o.applied)}{/}`
-        );
+        for (const o of currentOverrides) {
+          lines.push(`{#ffaa55-fg}⚠ ${escape(o.name)}:{/} {#888888-fg}${escape(o.applied)}{/}`);
+        }
+      }
+      if (backendLogs.length) {
+        if (!currentOverrides.length) noticeBox.style.border.fg = '#555555';
+        if (currentOverrides.length) lines.push('');
+        for (const line of backendLogs) {
+          lines.push(`{#666666-fg}${escape(line)}{/}`);
+        }
+      }
+      if (!lines.length) {
+        noticeBox.style.border.fg = '#444444';
+        noticeBox.setContent('');
+      } else {
         noticeBox.setContent(lines.join('\n'));
       }
       screen.render();
@@ -2354,7 +2122,6 @@ module.exports = {
   runSplash,
   showMainScreen,
   showWelcome,
-  showGridSelect,
   showGridSelectWithSearch,
   showMultiSelect,
   showAutocomplete,
@@ -2364,7 +2131,6 @@ module.exports = {
   showProgress,
   showFilterProgress,
   showCartProgress,
-  showCartComparison,
   showCartResult,
   waitForKey,
   buildSummary,

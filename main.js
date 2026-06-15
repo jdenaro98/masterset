@@ -339,8 +339,13 @@ async function run() {
       const dynamicResult = await ui.showDynamicOptimizer(
         firstListingCart, defaultCart, filterOptions,
         { conditions: DEFAULT_CONDITIONS, quals: DEFAULT_QUALS },
-        { totalCards: Object.keys(allCardData).length, initialOverrides: defaultOverrides }
+        {
+          totalCards: Object.keys(allCardData).length,
+          initialOverrides: defaultOverrides,
+          onLog: fn => { optimizerLogUpdater = fn; },
+        }
       );
+      optimizerLogUpdater = null;
 
       if (dynamicResult.action === 'home')    return;
       if (dynamicResult.action === 'restart') continue; // re-enters outer while loop
@@ -386,7 +391,7 @@ async function run() {
   ui.initScreen();
   ipc.spawnBackend();
   ipc.on('backend_log', msg => {
-    const handler = debugLogUpdater || filterDebugUpdater;
+    const handler = debugLogUpdater || filterDebugUpdater || optimizerLogUpdater;
     if (handler) handler(msg.text);
     else ui.muted(msg.text);
   });
@@ -403,6 +408,7 @@ async function run() {
   let debugLogUpdater      = null;
   let filterProgressUpdater = null;
   let filterDebugUpdater   = null;
+  let optimizerLogUpdater  = null;
   ipc.on('progress',           msg => progressUpdater      && progressUpdater(msg.card));
   ipc.on('card_page_progress', msg => cardPageUpdater      && cardPageUpdater(msg.card, msg.fetched));
   ipc.on('cart_progress',      msg => cartProgressUpdater  && cartProgressUpdater(msg.card));

@@ -266,7 +266,7 @@ def create_cart(optimized_cart, progress_callback=None):
             _log("System Chrome not found — please open https://www.tcgplayer.com/cart manually.")
             return cookie_path, failed_items, None
 
-        tmp_profile = tempfile.mkdtemp(prefix="pokescraper_")
+        tmp_profile = tempfile.mkdtemp(prefix="masterset_")
         _log("Launching Chrome with remote debugging...")
         proc = subprocess.Popen([
             chrome_path,

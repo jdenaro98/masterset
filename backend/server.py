@@ -56,13 +56,11 @@ def _platform_ua():
         " Gecko/20100101 Firefox/150.0"
     )
 
-import requests
-from playwright.sync_api import sync_playwright
+import requests  # noqa: E402
+from playwright.sync_api import sync_playwright  # noqa: E402
 
-# _BASE_DIR and sys.path already set at module top
-
-import cart_create
-import optimizer
+import cart_create  # noqa: E402
+import optimizer  # noqa: E402
 
 # ── stdout helpers ────────────────────────────────────────────────────────────
 
@@ -135,7 +133,7 @@ _mem_cache: dict = {}
 
 
 def _cache_dir():
-    d = os.path.join(os.path.expanduser('~'), '.pokescraper', 'cache')
+    d = os.path.join(os.path.expanduser('~'), '.masterset', 'cache')
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -576,9 +574,9 @@ def _normalize_listings(raw):
 # Maps the qualifier keys the frontend sends to listing field checks.
 # "Verified" on TCGPlayer's website = goldSeller:true in the API (verifiedSeller is unrelated).
 _QUAL_CHECKS = {
-    "Verified": lambda l: l.get("goldSeller", False),
-    "Direct":   lambda l: l.get("directSeller", False),
-    "WPN":      lambda l: "WizardsPlayNetwork" in (l.get("sellerPrograms") or []),
+    "Verified": lambda lst: lst.get("goldSeller", False),
+    "Direct":   lambda lst: lst.get("directSeller", False),
+    "WPN":      lambda lst: "WizardsPlayNetwork" in (lst.get("sellerPrograms") or []),
 }
 
 
@@ -641,11 +639,6 @@ def handle_fetch_listings(params):
 
     _cached_card_data = all_card_data
     return all_card_data
-
-
-def handle_optimize(params):
-    all_card_data = params["allCardData"]
-    return optimizer.optimize(all_card_data)
 
 
 def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
@@ -872,7 +865,6 @@ HANDLERS = {
     "filter_sets":            handle_filter_sets,
     "fetch_cards":            handle_fetch_cards,
     "fetch_listings":         handle_fetch_listings,
-    "optimize":               handle_optimize,
     "optimize_filtered":      handle_optimize_filtered,
     "get_filter_options":     handle_get_filter_options,
     "create_cart":            handle_create_cart,

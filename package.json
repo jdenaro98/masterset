@@ -1,7 +1,7 @@
 {
-  "name": "tcgscraper",
+  "name": "masterset",
   "version": "1.0.0",
-  "description": "TCGPlayer scraper with blessed TUI",
+  "description": "TCG cart optimizer — finds the cheapest multi-seller combination for your card list",
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
