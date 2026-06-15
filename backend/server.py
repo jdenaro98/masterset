@@ -19,10 +19,13 @@ import math
 import os
 import random
 import re
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
+import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -793,6 +796,72 @@ def handle_dump_listings(params):
     return {"path": out_path, "cards": len(_cached_card_data)}
 
 
+def handle_open_bmc_donate(params):
+    """
+    Launch system Chrome at the BMC donate page and pre-fill the amount via CDP.
+    Playwright disconnects immediately after filling, leaving Chrome for the user.
+    Uses port 9223 to avoid colliding with cart_create's port 9222.
+    """
+    amount = int(params.get('amount', 1))
+    chrome_path = cart_create._system_chrome_path()
+    if not chrome_path:
+        _log("[bmc] Chrome not found — cannot open donate page")
+        return {"ok": False, "error": "Chrome not found"}
+
+    tmp_profile = tempfile.mkdtemp(prefix='masterset_bmc_')
+    subprocess.Popen(
+        [
+            chrome_path,
+            f'--user-data-dir={tmp_profile}',
+            '--remote-debugging-port=9223',
+            '--no-first-run',
+            '--no-default-browser-check',
+            'https://buymeacoffee.com/jdenaro/donate',
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    cdp_ready = False
+    for _ in range(30):
+        try:
+            urllib.request.urlopen('http://localhost:9223/json/version', timeout=1)
+            cdp_ready = True
+            break
+        except Exception:
+            time.sleep(0.5)
+
+    if not cdp_ready:
+        _log("[bmc] Chrome CDP not ready — page opened without pre-fill")
+        return {"ok": True, "prefilled": False}
+
+    pw = sync_playwright().start()
+    try:
+        browser = pw.chromium.connect_over_cdp('http://localhost:9223')
+        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        page.wait_for_selector('#paymentAmount', timeout=15000)
+        page.evaluate(f"""() => {{
+            const input = document.getElementById('paymentAmount');
+            if (!input) return;
+            const setter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, String({amount}));
+            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+        }}""")
+        _log(f"[bmc] Amount pre-filled: ${amount}")
+    except Exception as e:
+        _log(f"[bmc] Error filling amount: {e}")
+    finally:
+        try:
+            pw.stop()
+        except Exception:
+            pass
+
+    return {"ok": True, "prefilled": True}
+
+
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
@@ -809,12 +878,23 @@ HANDLERS = {
     "create_cart":            handle_create_cart,
     "close_browser":          handle_close_browser,
     "dump_listings":          handle_dump_listings,
+    "open_bmc_donate":        handle_open_bmc_donate,
 }
 
 # ── main loop ─────────────────────────────────────────────────────────────────
 
 
 def main():
+    # One-shot CLI mode: called by electron-main to open BMC donate in Chrome
+    for arg in sys.argv[1:]:
+        if arg.startswith('--bmc-donate='):
+            try:
+                amount = int(arg.split('=', 1)[1])
+            except (ValueError, IndexError):
+                amount = 1
+            handle_open_bmc_donate({'amount': amount})
+            return
+
     for raw_line in sys.stdin:
         line = raw_line.strip()
         if not line:

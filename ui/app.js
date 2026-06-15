@@ -2026,10 +2026,13 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       tags:   true,
       scrollable:   true,
       alwaysScroll: true,
+      mouse:        true,
     });
 
     // ── cleanup ────────────────────────────────────────────────────────
     function cleanupAndResolve(value) {
+      process.stdout.write('\x1b]9999;bmc-donate=hide\x07');
+      _lastDonateSeq = 'hide';
       km.cleanup();
       if (spinnerTimer) clearInterval(spinnerTimer);
       if (debounceId)   clearTimeout(debounceId);
@@ -2198,6 +2201,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     }
 
     // ── render: savings panel + layout ────────────────────────────────
+    let _lastDonateSeq = null;
     function renderSavingsBox() {
       const CHEAP_GREEN = '#88cc88';
       const savings = !isCalc ? summaries[0].total - summaries[1].total : 0;
@@ -2212,16 +2216,25 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         cartBoxes[1].position.width = '38%';
         cartBoxes[1].position.right = undefined;
         savingsBox.style.border.fg = CHEAP_GREEN;
-        const savedStr = `$${savings.toFixed(2)}`;
+        const savedStr   = `$${savings.toFixed(2)}`;
+        const donateAmt  = Math.ceil(savings * 0.20);
+        const donateStr  = `$${donateAmt}.00`;
         savingsBox.setContent([
           '',
-          `{center}{${CHEAP_GREEN}-fg}{bold}YOU SAVED{/}{/}`,
+          ` {${CHEAP_GREEN}-fg}{bold}YOU SAVED{/}{/}`,
+          ` {${CHEAP_GREEN}-fg}{bold}${savedStr}{/}{/}`,
           '',
-          `{center}{${CHEAP_GREEN}-fg}{bold}${savedStr}{/}{/}`,
+          ` {#888888-fg}vs. the First Listing{/}`,
           '',
-          `{center}{#888888-fg}vs. the First Listing{/}`,
+          ` {#aaaaaa-fg}Consider donating ~20%:{/}`,
+          ` {#ffdd00-fg}${donateStr} ☕{/}`,
         ].join('\n'));
         savingsBox.show();
+        const seq = `\x1b]9999;bmc-donate=${savings.toFixed(2)}\x07`;
+        if (seq !== _lastDonateSeq) {
+          process.stdout.write(seq);
+          _lastDonateSeq = seq;
+        }
       } else {
         // 2-column layout
         cartBoxes[0].position.left  = 0;
@@ -2231,6 +2244,10 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         cartBoxes[1].position.width = undefined;
         cartBoxes[1].position.right = 1;
         savingsBox.hide();
+        if (_lastDonateSeq !== 'hide') {
+          process.stdout.write('\x1b]9999;bmc-donate=hide\x07');
+          _lastDonateSeq = 'hide';
+        }
       }
     }
 

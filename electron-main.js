@@ -77,6 +77,28 @@ ipcMain.on('pty-input',    (_, data)          => ptyProcess && ptyProcess.write(
 ipcMain.on('pty-resize',   (_, { cols, rows }) => ptyProcess && ptyProcess.resize(cols, rows));
 ipcMain.on('fit-to-terminal', (_, { width, height }) => win && win.setContentSize(width, height));
 
+ipcMain.on('open-bmc-donate', (_, { amount }) => {
+  const fs = require('fs');
+  let bin, args;
+  if (app.isPackaged) {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    bin  = path.join(process.resourcesPath, 'backend_server', `backend_server${ext}`);
+    args = [`--bmc-donate=${amount}`];
+  } else {
+    const venvPy = process.platform === 'win32'
+      ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
+      : path.join(__dirname, 'venv', 'bin', 'python3');
+    bin  = fs.existsSync(venvPy) ? venvPy : 'python3';
+    args = [path.join(__dirname, 'backend', 'server.py'), `--bmc-donate=${amount}`];
+  }
+  const { spawn } = require('child_process');
+  spawn(bin, args, {
+    stdio:    'ignore',
+    env:      { ...process.env, TCGSCRAPER_USER_DATA: app.getPath('userData') },
+    detached: true,
+  }).unref();
+});
+
 app.on('window-all-closed', () => {
   if (ptyProcess) ptyProcess.kill();
   app.quit();
