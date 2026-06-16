@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css">
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000000; overflow: hidden; }
@@ -71,8 +71,8 @@
       const amt = bmcDonateBtn._donateAmount;
       if (amt) ipcRenderer.send('open-bmc-donate', { amount: amt });
     });
-    const { Terminal }    = require('xterm');
-    const { FitAddon }    = require('xterm-addon-fit');
+    const { Terminal }    = require('@xterm/xterm');
+    const { FitAddon }    = require('@xterm/addon-fit');
 
     const term = new Terminal({
       cols: 160,
