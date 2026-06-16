@@ -9,7 +9,8 @@
     "copy:playwright:mac": "python3 -c \"import pathlib,shutil; b=sorted(pathlib.Path.home().joinpath('Library','Caches','ms-playwright').glob('chromium-*'))[-1]; dest=pathlib.Path('dist/backend_server/ms-playwright')/b.name; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copytree(str(b),str(dest),dirs_exist_ok=True); print(f'Copied {b.name} -> {dest}')\"",
     "build:mac": "npm run build:backend && npm run copy:playwright:mac && electron-builder --mac",
     "build:win": "npm run build:backend && electron-builder --win",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "lint": "eslint electron-main.js main.js ui/"
   },
   "dependencies": {
     "blessed": "^0.1.81",
@@ -21,7 +22,10 @@
     "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
     "electron-icon-maker": "^0.0.5",
-    "@electron/rebuild": "^4.0.4"
+    "@electron/rebuild": "^4.0.4",
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
   },
   "build": {
     "appId": "com.tcgscraper.app",

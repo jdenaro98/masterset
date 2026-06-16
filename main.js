@@ -217,7 +217,6 @@ async function run() {
           continue;
         }
         const cardNames = Object.keys(cardData);
-        const cardIds   = Object.values(cardData);
 
         if (!cardNames.length) {
           ui.muted('No cards found in this set.');
