@@ -83,8 +83,8 @@ Navigate to the release page and install the most recent release for your applic
     Microsoft Visual Studio Build Tools is needed to compile node-pty from node-gyp. Eventually this dependency will be removed in the transition to a web-app.
         - **Windows Only**: Easy commands using winget for these packages:
             - ```winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" --source winget```
-            - ```winget install python --source winget```
-            - ```winget install node --source winget```
+            - ```winget install Python.Python.3.14```
+            - ```winget install OpenJS.NodeJS.LTS```
     3. ```python -m venv venv``` to create virtual environment
     4. Mount virtual environment:
         - (Mac) source venv/bin/activate
