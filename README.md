@@ -1,4 +1,8 @@
-# Welcome to MasterSet (aka TCGScraper)!!
+<p align="center">
+  <img src="build/icons/png/256x256.png" width="256" height="256" alt="MasterSet icon">
+</p>
+
+# Welcome to masterset (aka TCGScraper)!!
 
 ## Intro
 
@@ -71,20 +75,16 @@ Navigate to the release page and install the most recent release for your applic
 
 - After first time installation (below), all you have to do to run the app is to be in your python venv and run ```npm start``` to run the Electron.js app.
 
-- VSCode
-    1. Clone Repo using https://github.com/jdenaro98/masterset_tool.git
-    2. Open Terminal Using 
-        - Ctrl + Shift + `
-        - Or Terminal -> New Terminal
-    3. Assuming you have python installed, it will automatically open the virtual environment (venv), just give it a second
-    4. ```python install -r requirements.txt``` to install python dependencies
-    5. ```playwright install``` installs playwright (required to add to a cart)
-    6. ```npm install``` to install node dependencies
-    7. ```npm start``` to run masterset_tool app
-
 - CLI
     1. Clone the repo using ```git clone https://github.com/jdenaro98/masterset_tool.git```
     2. cd to masterset_tool repo directory
+    3. Ensure you have python, node, Microsoft Visual Studio Build Tools installed as dependencies. 
+    
+    Microsoft Visual Studio Build Tools is needd to compile node-pty from node-gyp. Eventually this dependency will be removed in the transition to a web-app.
+        - **Windows Only**: Easy commands using winget for these packages:
+            - ```winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" --source winget```
+            - ```winget install python --source winget```
+            - ```winget install node --source winget```
     3. ```python -m venv venv``` to create virtual environment
     4. Mount virtual environment:
         - (Mac) source venv/bin/activate
