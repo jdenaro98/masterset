@@ -80,7 +80,7 @@ Navigate to the release page and install the most recent release for your applic
     2. cd to masterset_tool repo directory
     3. Ensure you have python, node, Microsoft Visual Studio Build Tools installed as dependencies. 
     
-    Microsoft Visual Studio Build Tools is needd to compile node-pty from node-gyp. Eventually this dependency will be removed in the transition to a web-app.
+    Microsoft Visual Studio Build Tools is needed to compile node-pty from node-gyp. Eventually this dependency will be removed in the transition to a web-app.
         - **Windows Only**: Easy commands using winget for these packages:
             - ```winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" --source winget```
             - ```winget install python --source winget```
