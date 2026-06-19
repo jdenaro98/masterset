@@ -93,3 +93,20 @@ jobs:
           name: ${{ matrix.artifact-name }}
           path: ${{ matrix.artifact-path }}
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach installers to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
