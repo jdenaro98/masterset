@@ -67,29 +67,19 @@ Navigate to the release page and install the most recent release for your applic
 ## Development/Source code installation
 
 ### Dependencies
-- Python (for virtual environment)
-- Node.js/npm for js dependencies (blessed, Electron)
-- Google Chrome (for adding cards to a cart)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+That's it. Node.js, Python, build tools, Playwright, Chromium, and a full desktop environment for running the app are all handled automatically inside the container and inside Fluxbox.
 
 ### Installation
 
-- After first time installation (below), all you have to do to run the app is to be in your python venv and run ```npm start``` to run the Electron.js app.
+1. Clone the repo: `git clone https://github.com/jdenaro98/masterset_tool.git`
+2. Open the folder in VS Code
+3. When prompted **"Reopen in Container"**, click it — or open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Dev Containers: Reopen in Container**
+4. Wait for the container to build and `postCreateCommand` to finish — this installs all dependencies and downloads Playwright Chromium. **First build only**, subsequent starts are fast.
+5. Navigate to **`localhost:6080`** in your browser and click **Connect** (if prompted for password: `vscode`)
+6. A Fluxbox desktop opens with a terminal already running in the project directory
+7. Run `npm start` in that terminal to launch the app
 
-- CLI
-    1. Clone the repo using ```git clone https://github.com/jdenaro98/masterset_tool.git```
-    2. cd to masterset_tool repo directory
-    3. Ensure you have python, node, Microsoft Visual Studio Build Tools installed as dependencies. 
-    
-    Microsoft Visual Studio Build Tools is needed to compile node-pty from node-gyp. Eventually this dependency will be removed in the transition to a web-app.
-        - **Windows Only**: Easy commands using winget for these packages:
-            - ```winget install Microsoft.VisualStudio.2022.BuildTools --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended" --source winget```
-            - ```winget install Python.Python.3.14```
-            - ```winget install OpenJS.NodeJS.LTS```
-    3. ```python -m venv venv``` to create virtual environment
-    4. Mount virtual environment:
-        - (Mac) source venv/bin/activate
-        - (Win) venv/scripts/activate\
-    5. ```python install -r requirements.txt``` to install python dependencies
-    6. ```playwright install``` installs playwright (required to add to a cart)
-    7. ```npm install``` to install node dependencies (must already have node installed on system)
-    8. ```npm start``` to run masterset_tool app
+The app runs entirely inside the container's desktop — including Chromium for the cart creation feature. Everything is visible in the `localhost:6080` browser tab.
