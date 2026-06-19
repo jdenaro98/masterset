@@ -57,6 +57,7 @@
       "target": "dmg",
       "category": "public.app-category.utilities",
       "icon": "build/icons/mac/icon.icns",
+      "identity": null,
       "signIgnore": [
         "ms-playwright"
       ]

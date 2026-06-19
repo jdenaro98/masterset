@@ -84,7 +84,6 @@ jobs:
           # (macOS) or WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD (Windows)
           # as encrypted repository secrets and remove these overrides.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_LINK: ''
           CSC_KEY_PASSWORD: ''
 
       # ── Upload installer as a workflow artifact ────────────────────────────
