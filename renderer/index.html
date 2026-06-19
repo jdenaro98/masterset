@@ -2,20 +2,77 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css">
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000000; overflow: hidden; }
     #terminal { width: 100%; height: 100%; }
     .xterm-viewport { overflow-y: hidden !important; }
+    #bmc-btn {
+      display: none;
+      position: fixed;
+      bottom: 18px;
+      left: 18px;
+      z-index: 9999;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: #FFDD00;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      transition: transform 0.15s ease;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+    #bmc-btn:hover { transform: scale(1.08); }
+    #bmc-btn img { width: 32px; height: 32px; display: block; }
+    #bmc-donate-btn {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      background: #FFDD00;
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      transition: transform 0.15s ease;
+      padding: 8px 16px 8px 10px;
+      align-items: center;
+      gap: 8px;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #000000;
+    }
+    #bmc-donate-btn:hover { transform: scale(1.05); }
+    #bmc-donate-btn img { width: 26px; height: 26px; display: block; }
   </style>
 </head>
 <body>
   <div id="terminal"></div>
+  <button id="bmc-btn" title="Buy me a coffee!">
+    <img src="https://cdn.buymeacoffee.com/buttons/bmc-new-btn-logo.svg" alt="Buy Me A Coffee">
+  </button>
+  <button id="bmc-donate-btn" title="Donate ~20% of your savings to fund future features!">
+    <img src="https://cdn.buymeacoffee.com/buttons/bmc-new-btn-logo.svg" alt="Buy Me A Coffee">
+    <span id="bmc-donate-amount">$0</span>
+  </button>
   <script>
-    const { ipcRenderer } = require('electron');
-    const { Terminal }    = require('xterm');
-    const { FitAddon }    = require('xterm-addon-fit');
+    const { ipcRenderer, shell } = require('electron');
+    const bmcBtn = document.getElementById('bmc-btn');
+    bmcBtn.addEventListener('click', () => {
+      shell.openExternal('https://buymeacoffee.com/jdenaro');
+    });
+    const bmcDonateBtn = document.getElementById('bmc-donate-btn');
+    const bmcDonateAmountSpan = document.getElementById('bmc-donate-amount');
+    bmcDonateBtn.addEventListener('click', () => {
+      const amt = bmcDonateBtn._donateAmount;
+      if (amt) ipcRenderer.send('open-bmc-donate', { amount: amt });
+    });
+    const { Terminal }    = require('@xterm/xterm');
+    const { FitAddon }    = require('@xterm/addon-fit');
 
     const term = new Terminal({
       cols: 160,
@@ -51,12 +108,59 @@
     window.addEventListener('focus', () => term.focus());
 
 
+    // Reposition the donate button to stay inside the savings box at any window size.
+    // Constants mirror app.js: CART_TOP=2, right:1 border on the outerBox.
+    function updateDonateButtonPos() {
+      if (bmcDonateBtn.style.display === 'none') return;
+      const xtermScreen = document.querySelector('.xterm-screen');
+      if (!xtermScreen) return;
+      const cellH = xtermScreen.offsetHeight / term.rows;
+      const cellW = xtermScreen.offsetWidth  / term.cols;
+      // outerBox has a 1-row top border (row 0), so all inner rows are offset by 1.
+      // CART_TOP=2 means savings box top border = terminal row 3; interior starts at row 4.
+      bmcDonateBtn.style.top   = Math.round(4 * cellH + 2) + 'px';
+      // outerBox right border = col 159; savingsBox right:1 → border at col 157; interior at col 156.
+      // col 156's right edge = (160-156-1)*cellW = 3*cellW from viewport right.
+      bmcDonateBtn.style.right = Math.round(4 * cellW + 2) + 'px';
+    }
+
     // Wire up PTY I/O immediately — data can start flowing before the window resize
-    ipcRenderer.on('pty-data', (_, data) => term.write(data));
+    ipcRenderer.on('pty-data', (_, data) => {
+      if (data.includes('\x1b]9999;bmc-donate=')) {
+        const m = data.match(/\x1b\]9999;bmc-donate=([^\x07]*)\x07/);
+        if (m) {
+          const val = m[1];
+          if (val === 'hide') {
+            bmcDonateBtn.style.display = 'none';
+          } else {
+            const savings = parseFloat(val);
+            if (!isNaN(savings)) {
+              const donateAmt = Math.ceil(savings * 0.20);
+              bmcDonateBtn._donateAmount = donateAmt;
+              bmcDonateAmountSpan.textContent = `$${donateAmt}`;
+              bmcDonateBtn.style.display = 'flex';
+              updateDonateButtonPos();
+            }
+          }
+        }
+        data = data.replace(/\x1b\]9999;bmc-donate=[^\x07]*\x07/g, '');
+        if (!data) return;
+      }
+      if (data.includes('\x1b]9999;bmc=')) {
+        if (data.includes('bmc=show')) bmcBtn.style.display = 'flex';
+        if (data.includes('bmc=hide')) bmcBtn.style.display = 'none';
+        data = data.replace(/\x1b\]9999;bmc=[a-z]+\x07/g, '');
+        if (!data) return;
+      }
+      term.write(data);
+    });
     term.onData(data => ipcRenderer.send('pty-input', data));
     // onBinary handles DEFAULT-encoded mouse events (fallback if SGR mode isn't negotiated)
     term.onBinary(data => ipcRenderer.send('pty-input', data));
-    term.onResize(({ cols, rows }) => ipcRenderer.send('pty-resize', { cols, rows }));
+    term.onResize(({ cols, rows }) => {
+      ipcRenderer.send('pty-resize', { cols, rows });
+      updateDonateButtonPos();
+    });
 
     // Wait for xterm to render at 160×50, measure its pixel footprint,
     // then ask the main process to resize the window to match exactly.
@@ -70,8 +174,12 @@
       }
 
       // After this point, let FitAddon adapt the terminal to any user-driven window resizes
-      const ro = new ResizeObserver(() => fitAddon.fit());
+      const ro = new ResizeObserver(() => {
+        fitAddon.fit();
+        updateDonateButtonPos();
+      });
       ro.observe(document.getElementById('terminal'));
+
     }));
   </script>
 </body>

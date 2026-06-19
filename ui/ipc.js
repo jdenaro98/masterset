@@ -16,19 +16,34 @@ const pending   = new Map();   // id → { resolve, reject }
 const listeners = new Map();   // type → [handler, ...]
 
 function spawnBackend() {
-  const root       = path.resolve(__dirname, '..');
-  const serverPath = path.join(root, 'backend', 'server.py');
+  const isPackaged = process.env.TCGSCRAPER_PACKAGED === '1';
+  const root = path.resolve(__dirname, '..');
 
-  // Use the venv Python if it exists, otherwise fall back to system Python
-  const venvPy = process.platform === 'win32'
-    ? path.join(root, 'venv', 'Scripts', 'python.exe')
-    : path.join(root, 'venv', 'bin', 'python3');
+  let pythonExe, args, cwd;
 
-  const pythonExe = require('fs').existsSync(venvPy) ? venvPy : 'python3';
+  if (isPackaged) {
+    // Use the PyInstaller-bundled binary placed in extraResources/backend_server/
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    pythonExe = path.join(process.env.TCGSCRAPER_RESOURCES, 'backend_server', `backend_server${ext}`);
+    args = [];
+    cwd  = process.env.TCGSCRAPER_USER_DATA || root;
+  } else {
+    // Dev: prefer venv Python, fall back to system python3
+    const venvPy = process.platform === 'win32'
+      ? path.join(root, 'venv', 'Scripts', 'python.exe')
+      : path.join(root, 'venv', 'bin', 'python3');
+    pythonExe = require('fs').existsSync(venvPy) ? venvPy : 'python3';
+    args = [path.join(root, 'backend', 'server.py')];
+    cwd  = root;
+  }
 
-  pyProc = spawn(pythonExe, [serverPath], {
+  pyProc = spawn(pythonExe, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
-    cwd:   root,
+    cwd,
+    env: {
+      ...process.env,
+      TCGSCRAPER_USER_DATA: process.env.TCGSCRAPER_USER_DATA || root,
+    },
   });
 
   const rl = readline.createInterface({ input: pyProc.stdout });

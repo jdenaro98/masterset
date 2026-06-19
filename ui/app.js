@@ -4,7 +4,7 @@ const blessed      = require('blessed');
 const { spawn }    = require('child_process');
 const fs           = require('fs');
 const path         = require('path');
-const { spawnBackend, call, on: onEvent } = require('./ipc');
+const { call } = require('./ipc');
 
 // ── screen & outer border ──────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ function initScreen() {
   screen = blessed.screen({
     smartCSR:    true,
     fullUnicode: true,
-    title:       'TCGScraper',
+    title:       'masterset',
   });
 
   screen.enableMouse();
@@ -291,107 +291,35 @@ function makeKeyManager() {
   };
 }
 
-// ── 3-column grid select ───────────────────────────────────────────────────
+// ── invalid-input flash helper ────────────────────────────────────────────
 
-function showGridSelect(items, promptText, opts = {}) {
-  return new Promise(resolve => {
-    sectionClear();
-    logBox.hide();
-    hintWidget(promptText, 0, '#cccccc');
-
-    const COLS = opts.cols || 3;
-    const rows = Math.ceil(items.length / COLS);
-    let curRow = 0, curCol = 0;
-    const km = makeKeyManager();
-
-    function cleanupAndResolve(value) {
-      km.cleanup();
-      gridBox.destroy();
-      activeWidget = null;
-      resolve(value);
-    }
-
-    const gridBox = blessed.box({
-      parent:       outerBox,
-      top: 2, left: 1, right: 1, bottom: 2,
-      scrollable:   true,
-      alwaysScroll: true,
-      keys:         true,
-      tags:         true,
-      scrollbar: { ch: '│', style: { fg: PRIMARY } },
+function _makeFlashInvalid(inputBox, isDestroyed) {
+  let flashTimer = null;
+  return function flashInvalidInput() {
+    if (flashTimer) return;
+    const origBg = inputBox.style.bg;
+    const origFg = inputBox.style.fg;
+    inputBox.style.bg = '#550000';
+    inputBox.style.fg = '#ff6666';
+    const warn = blessed.text({
+      parent: outerBox,
+      top: 2, left: 1, right: 1, height: 1,
+      content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
+      style: { bg: '#000000' },
+      tags: true,
     });
-
-    function render() {
-      const w        = Math.max(30, (screen.width || 120) - 6);
-      const colWidth = Math.floor(w / COLS);
-      const maxText  = Math.max(4, colWidth - 2);
-      const lines    = [];
-
-      for (let r = 0; r < rows; r++) {
-        let line = '';
-        for (let c = 0; c < COLS; c++) {
-          const idx  = c * rows + r;
-          if (idx >= items.length) {
-            line += ' '.repeat(colWidth);
-            continue;
-          }
-          const name  = items[idx];
-          const isCur = (r === curRow && c === curCol);
-          const cell  = name.length > maxText
-            ? name.substring(0, maxText - 1) + '…'
-            : name.padEnd(maxText);
-          line += isCur
-            ? `{#ffffff-bg}{#000000-fg} ${escape(cell)} {/}`
-            : `{${SECONDARY}-fg} ${escape(cell)} {/}`;
-        }
-        lines.push(line);
-      }
-      gridBox.setContent(lines.join('\n'));
-
-      const visH = Math.max(1, gridBox.height);
-      const base = gridBox.childBase || 0;
-      if (curRow >= base + visH) gridBox.scrollTo(curRow - visH + 1);
-      else if (curRow < base)    gridBox.scrollTo(curRow);
-
+    screen.render();
+    inputBox.focus();
+    flashTimer = setTimeout(() => {
+      flashTimer = null;
+      if (isDestroyed()) return;
+      inputBox.style.bg = origBg;
+      inputBox.style.fg = origFg;
+      try { warn.destroy(); } catch (_) {}
       screen.render();
-    }
-
-    function clampCol() {
-      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
-      if (curCol > maxCol) curCol = maxCol;
-    }
-
-    gridBox.key('up',       () => { if (curRow > 0) { curRow--; clampCol(); render(); } });
-    gridBox.key('down',     () => { if (curRow < rows - 1) { curRow++; clampCol(); render(); } });
-    gridBox.key('left',     () => { if (curCol > 0) { curCol--; render(); } });
-    gridBox.key('right',    () => {
-      const maxCol = Math.min(COLS - 1, Math.floor((items.length - 1 - curRow) / rows));
-      if (curCol < maxCol) { curCol++; render(); }
-    });
-    gridBox.key('pageup',   () => {
-      curRow = Math.max(0, curRow - Math.max(1, gridBox.height));
-      clampCol(); render();
-    });
-    gridBox.key('pagedown', () => {
-      curRow = Math.min(rows - 1, curRow + Math.max(1, gridBox.height));
-      clampCol(); render();
-    });
-    gridBox.key(['enter', 'return'], () => {
-      const idx = curCol * rows + curRow;
-      if (idx < items.length) cleanupAndResolve(items[idx]);
-    });
-
-    km.add('escape', () => cleanupAndResolve(null));
-    if (opts.extraKeys) {
-      for (const [key, val] of Object.entries(opts.extraKeys)) {
-        km.add(key, () => cleanupAndResolve(val));
-      }
-    }
-
-    gridBox.focus();
-    activeWidget = gridBox;
-    render();
-  });
+      inputBox.focus();
+    }, 900);
+  };
 }
 
 // ── 3-column grid select with search bar ──────────────────────────────────
@@ -409,7 +337,6 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
     let listCursor = 0;
     let curRow = 0, curCol = 0;
     let destroyed = false;
-    let flashTimer = null;
     const km = makeKeyManager();
 
     function cleanupAndResolve(value) {
@@ -427,6 +354,8 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
       style: { fg: PRIMARY, bg: '#000000' },
       inputOnFocus: true,
     });
+
+    const flashInvalidInput = _makeFlashInvalid(inputBox, () => destroyed);
 
     const contentBox = blessed.box({
       parent:       outerBox,
@@ -506,32 +435,6 @@ function showGridSelectWithSearch(items, promptText, opts = {}) {
     function render() {
       if (query.length > 0) renderList();
       else renderGrid();
-    }
-
-    function flashInvalidInput() {
-      if (flashTimer) return;
-      const origBg = inputBox.style.bg;
-      const origFg = inputBox.style.fg;
-      inputBox.style.bg = '#550000';
-      inputBox.style.fg = '#ff6666';
-      const warn = blessed.text({
-        parent: outerBox,
-        top: 2, left: 1, right: 1, height: 1,
-        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
-        style: { bg: '#000000' },
-        tags: true,
-      });
-      screen.render();
-      inputBox.focus();
-      flashTimer = setTimeout(() => {
-        flashTimer = null;
-        if (destroyed) return;
-        inputBox.style.bg = origBg;
-        inputBox.style.fg = origFg;
-        try { warn.destroy(); } catch (_) {}
-        screen.render();
-        inputBox.focus();
-      }, 900);
     }
 
     function updateQuery() {
@@ -959,25 +862,60 @@ function showMultiSelect(items, promptText, opts = {}) {
 
 // ── autocomplete (set selection) ───────────────────────────────────────────
 
-function showAutocomplete(choices, promptText) {
+function showAutocomplete(choices, promptText, opts = {}) {
   return new Promise(resolve => {
     sectionClear();
     logBox.hide();
     hintWidget(promptText, 0, '#cccccc');
-    hintWidget('  Type to filter   TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
+    if (opts.showRefreshBtn) {
+      // Shorten hint to leave room for the refresh button on the right
+      const h = blessed.text({
+        parent: outerBox,
+        top: 1, left: 1, right: 17, height: 1,
+        content: '{#888888-fg}  Type to filter   ↑/↓ or TAB/SHIFT+TAB: cycle matches   ENTER: confirm   ESC: back{/}',
+        style: { bg: '#000000' },
+        tags: true,
+      });
+      activeHints.push(h);
+    } else {
+      hintWidget('  Type to filter   ↑/↓ or TAB/SHIFT+TAB: cycle matches   PgUp/PgDn: scroll   ENTER: confirm   ESC: back', 1, '#888888');
+    }
 
     let filtered = [...choices];
     let destroyed = false;
-    let flashTimer = null;
     const km = makeKeyManager();
 
     function cleanupAndResolve(value) {
       destroyed = true;
       km.cleanup();
+      screen.removeListener('wheeldown', onWheelDown);
+      screen.removeListener('wheelup',   onWheelUp);
       inputBox.destroy();
       dropList.destroy();
       activeWidget = null;
       resolve(value);
+    }
+
+    if (opts.showRefreshBtn) {
+      const refreshBtn = blessed.box({
+        parent: outerBox,
+        top: 1, right: 2, width: 14, height: 1,
+        content: '{#888888-fg}[ ↻ Refresh ]{/}',
+        tags: true,
+        mouse: true,
+        clickable: true,
+        style: { bg: '#000000' },
+      });
+      activeHints.push(refreshBtn);
+      refreshBtn.on('mouseover', () => {
+        refreshBtn.setContent('{#000000-fg}{#ffffff-bg}[ ↻ Refresh ]{/}');
+        screen.render();
+      });
+      refreshBtn.on('mouseout', () => {
+        refreshBtn.setContent('{#888888-fg}[ ↻ Refresh ]{/}');
+        screen.render();
+      });
+      refreshBtn.on('click', () => cleanupAndResolve('__refresh__'));
     }
 
     const inputBox = blessed.textbox({
@@ -992,7 +930,7 @@ function showAutocomplete(choices, promptText) {
       top: 4, left: 1, right: 1, bottom: 2,
       keys:         true,
       vi:           true,
-      mouse:        true,
+      mouse:        false,
       scrollable:   true,
       alwaysScroll: true,
       scrollbar: { ch: '│', track: { ch: ' ' } },
@@ -1005,31 +943,12 @@ function showAutocomplete(choices, promptText) {
       tags: false,
     });
 
-    function flashInvalidInput() {
-      if (flashTimer) return;
-      const origBg = inputBox.style.bg;
-      const origFg = inputBox.style.fg;
-      inputBox.style.bg = '#550000';
-      inputBox.style.fg = '#ff6666';
-      const warn = blessed.text({
-        parent: outerBox,
-        top: 2, left: 1, right: 1, height: 1,
-        content: '{#ff6666-fg}  Please choose a valid option from the list{/}',
-        style: { bg: '#000000' },
-        tags: true,
-      });
-      screen.render();
-      inputBox.focus();
-      flashTimer = setTimeout(() => {
-        flashTimer = null;
-        if (destroyed) return;
-        inputBox.style.bg = origBg;
-        inputBox.style.fg = origFg;
-        try { warn.destroy(); } catch (_) {}
-        screen.render();
-        inputBox.focus();
-      }, 900);
-    }
+    const onWheelDown = () => { dropList.scroll(3);  screen.render(); };
+    const onWheelUp   = () => { dropList.scroll(-3); screen.render(); };
+    screen.on('wheeldown', onWheelDown);
+    screen.on('wheelup',   onWheelUp);
+
+    const flashInvalidInput = _makeFlashInvalid(inputBox, () => destroyed);
 
     function refresh(val) {
       filtered = choices.filter(c => c.toLowerCase().includes(val.toLowerCase()));
@@ -1054,7 +973,8 @@ function showAutocomplete(choices, promptText) {
     inputBox.key('tab',   () => cycleSelection(+1));
     inputBox.key('S-tab', () => cycleSelection(-1));
 
-    inputBox.key('down', () => dropList.focus());
+    inputBox.key('up',   () => cycleSelection(-1));
+    inputBox.key('down', () => cycleSelection(+1));
 
     inputBox.key('pageup', () => {
       dropList.scroll(-Math.max(1, dropList.height));
@@ -1166,20 +1086,19 @@ function showConfirm(question) {
   });
 }
 
-// ── progress bar (scraping) ────────────────────────────────────────────────
+// ── progress bar shared factory ────────────────────────────────────────────
 
-function showProgress(total) {
+function _makeProgressScreen(total, headerText) {
   sectionClear();
   logBox.hide();
 
-  const headerWidget = blessed.text({
+  progressWidgets.push(blessed.text({
     parent: outerBox,
     top: 1, left: 1, right: 1, height: 1,
-    content: `{bold}{${PRIMARY}-fg}Scraping card listings…{/}`,
+    content: `{bold}{${PRIMARY}-fg}${escape(headerText)}{/}`,
     style: { bg: '#000000' },
     tags: true,
-  });
-  progressWidgets.push(headerWidget);
+  }));
 
   const barTrack = blessed.box({
     parent: outerBox,
@@ -1220,15 +1139,13 @@ function showProgress(total) {
   });
   progressWidgets.push(pctText);
 
-  // Separator and scrollable debug log area below the progress widgets
-  const debugSep = blessed.text({
+  progressWidgets.push(blessed.text({
     parent: outerBox,
     top: 7, left: 1, right: 1, height: 1,
     content: `{#333333-fg}${'─'.repeat(80)}{/}`,
     style: { bg: '#000000' },
     tags: true,
-  });
-  progressWidgets.push(debugSep);
+  }));
 
   const debugLog = blessed.log({
     parent: outerBox,
@@ -1242,17 +1159,12 @@ function showProgress(total) {
 
   let done = 0;
 
-  function onComplete(cardName) {
+  function onComplete(label) {
     done++;
     const pct = Math.round((done / total) * 100);
     barFill.width = Math.round(Math.max(1, barTrack.width) * pct / 100);
-    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)}{/}`);
+    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(label)}{/}`);
     pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
-    screen.render();
-  }
-
-  function onPage(cardName, count) {
-    statusText.setContent(`{${SECONDARY}-fg}[${done}/${total}] ${escape(cardName)} [${count}]{/}`);
     screen.render();
   }
 
@@ -1261,7 +1173,25 @@ function showProgress(total) {
     screen.render();
   }
 
-  return { onComplete, onPage, onDebug };
+  return { barTrack, statusText, getDone: () => done, onComplete, onDebug };
+}
+
+// ── progress bar (scraping) ────────────────────────────────────────────────
+
+function showProgress(total) {
+  const pb = _makeProgressScreen(total, 'Scraping card listings…');
+  function onPage(cardName, count) {
+    pb.statusText.setContent(`{${SECONDARY}-fg}[${pb.getDone()}/${total}] ${escape(cardName)} [${count}]{/}`);
+    screen.render();
+  }
+  return { onComplete: pb.onComplete, onPage, onDebug: pb.onDebug };
+}
+
+// ── progress bar (set probing) ────────────────────────────────────────────
+
+function showFilterProgress(total) {
+  const pb = _makeProgressScreen(total, 'Probing sets for price data…');
+  return { onComplete: pb.onComplete, onDebug: pb.onDebug };
 }
 
 // ── progress bar (cart creation) ──────────────────────────────────────────
@@ -1335,47 +1265,6 @@ function showCartProgress(total, summaryInfo) {
     pctText.setContent(`{${SECONDARY}-fg}${pct}%{/}`);
     screen.render();
   };
-}
-
-// ── side-by-side summary comparison ───────────────────────────────────────
-
-function showCartComparison(first, optimized) {
-  sectionClear();
-
-  const w    = Math.max(60, (screen.width || 120) - 4);
-  const half = Math.floor(w / 2) - 1;
-  const div  = ' │ ';
-
-  const leftLines = [
-    'FIRST LISTING',
-    `  Cards requested:   ${first.cards}`,
-    `  Unique sellers:    ${first.sellers}`,
-    `  Subtotal:          $${first.rawCost.toFixed(2)}`,
-    `  Shipping:          $${first.shipping.toFixed(2)}`,
-    `  Estimated total:   $${first.total.toFixed(2)}`,
-  ];
-  const rightLines = [
-    'OPTIMIZED CART',
-    `  Cards requested:   ${optimized.cards}`,
-    `  Unique sellers:    ${optimized.sellers}`,
-    `  Subtotal:          $${optimized.rawCost.toFixed(2)}`,
-    `  Shipping:          $${optimized.shipping.toFixed(2)}`,
-    `  Estimated total:   $${optimized.total.toFixed(2)}`,
-  ];
-
-  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-  for (let i = 0; i < leftLines.length; i++) {
-    const l = leftLines[i].padEnd(half);
-    const r = rightLines[i] || '';
-    if (i === 0) {
-      logBox.log(`{bold}{${SECONDARY}-fg}${escape(l)}{/}${div}{bold}{${PRIMARY}-fg}${escape(r)}{/}`);
-    } else {
-      logBox.log(`{${SECONDARY}-fg}${escape(l)}{/}${div}{${PRIMARY}-fg}${escape(r)}{/}`);
-    }
-  }
-  logBox.log(`{#888888-fg}${'─'.repeat(w)}{/}`);
-  logBox.log('');
-  screen.render();
 }
 
 // ── cart result display ────────────────────────────────────────────────────
@@ -1485,7 +1374,7 @@ function showTextInput(promptText, defaultVal = '') {
 
 function showWelcome() {
   const w         = Math.max(10, (screen.cols || screen.width || 80) - 3);
-  const title     = 'Welcome to TCGScraper!';
+  const title     = 'Welcome to masterset!';
   const pad       = Math.max(0, Math.floor((w - title.length) / 2));
   const separator = '='.repeat(w);
   header(separator);
@@ -1555,6 +1444,7 @@ function showFilePicker(mode, defaultFilePath) {
 
 function showMainScreen() {
   return new Promise(resolve => {
+    process.stdout.write('\x1b]9999;bmc=show\x07');
     sectionClear();
     logBox.hide();
 
@@ -1598,6 +1488,7 @@ function showMainScreen() {
     const km    = makeKeyManager();
 
     function done(value) {
+      process.stdout.write('\x1b]9999;bmc=hide\x07');
       km.cleanup();
       try { welcomeWidget.destroy();  } catch (_) {}
       try { iconBox.destroy();        } catch (_) {}
@@ -1673,7 +1564,7 @@ function showMainScreen() {
     });
 
     // Welcome banner — top of screen, inside border
-    const welcomeText = 'Welcome to MasterSet Helper';
+    const welcomeText = 'Welcome to masterset!';
     const wPad = Math.max(0, Math.floor((screenW - welcomeText.length) / 2));
     const welcomeWidget = blessed.text({
       parent:  outerBox,
@@ -1786,6 +1677,8 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     const totalCards     = extra.totalCards ?? firstCart.length;
     let userCart         = defaultCart;
     let currentOverrides = extra.initialOverrides || [];
+    const backendLogs    = [];
+    if (extra.onLog) extra.onLog(text => { backendLogs.push(text); renderNotice(); });
     let isCalc           = false;
     let debounceId       = null;
     let spinnerTimer     = null;
@@ -1823,7 +1716,7 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
     });
     activeHints.push(hintWidget);
 
-    // ── 2 cart boxes ───────────────────────────────────────────────────
+    // ── 2 cart boxes + savings panel ───────────────────────────────────
     const CART_TITLES = ['FIRST LISTING', 'DYNAMIC OPTIMIZED'];
     const cartBoxes = [0, 1].map(i => {
       const box = blessed.box({
@@ -1839,6 +1732,18 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         keys:   true,
       });
       return box;
+    });
+
+    const savingsBox = blessed.box({
+      parent: outerBox,
+      top:    CART_TOP,
+      left:   '76%',
+      right:  1,
+      height: CART_H,
+      border: { type: 'line' },
+      style:  { border: { fg: '#333333' }, bg: '#000000' },
+      hidden: true,
+      tags:   true,
     });
 
     // ── 2 filter boxes ─────────────────────────────────────────────────
@@ -1879,14 +1784,17 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
       tags:   true,
       scrollable:   true,
       alwaysScroll: true,
+      mouse:        true,
     });
 
     // ── cleanup ────────────────────────────────────────────────────────
     function cleanupAndResolve(value) {
+      process.stdout.write('\x1b]9999;bmc-donate=hide\x07');
+      _lastDonateSeq = 'hide';
       km.cleanup();
       if (spinnerTimer) clearInterval(spinnerTimer);
       if (debounceId)   clearTimeout(debounceId);
-      for (const b of [...cartBoxes, ...filterBoxes, noticeBox]) {
+      for (const b of [...cartBoxes, ...filterBoxes, noticeBox, savingsBox]) {
         try { b.destroy(); } catch (_) {}
       }
       activeWidget = null;
@@ -1927,9 +1835,11 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
         } finally {
           isCalc = false;
           stopSpinner();
+          renderSavingsBox();
           renderCartBox(0);
           renderCartBox(1);
           renderNotice();
+          screen.render();
         }
       }, 300);
     }
@@ -2035,20 +1945,82 @@ function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilt
 
     // ── render: notice box ─────────────────────────────────────────────
     function renderNotice() {
-      if (!currentOverrides.length) {
-        noticeBox.setContent('');
-        noticeBox.style.border.fg = '#444444';
-      } else {
+      const lines = [];
+      if (currentOverrides.length) {
         noticeBox.style.border.fg = '#ff9955';
-        const lines = currentOverrides.map(o =>
-          `{#ffaa55-fg}⚠ ${escape(o.name)}:{/} {#888888-fg}${escape(o.applied)}{/}`
-        );
+        for (const o of currentOverrides) {
+          lines.push(`{#ffaa55-fg}⚠ ${escape(o.name)}:{/} {#888888-fg}${escape(o.applied)}{/}`);
+        }
+      }
+      if (backendLogs.length) {
+        if (!currentOverrides.length) noticeBox.style.border.fg = '#555555';
+        if (currentOverrides.length) lines.push('');
+        for (const line of backendLogs) {
+          lines.push(`{#666666-fg}${escape(line)}{/}`);
+        }
+      }
+      if (!lines.length) {
+        noticeBox.style.border.fg = '#444444';
+        noticeBox.setContent('');
+      } else {
         noticeBox.setContent(lines.join('\n'));
       }
       screen.render();
     }
 
+    // ── render: savings panel + layout ────────────────────────────────
+    let _lastDonateSeq = null;
+    function renderSavingsBox() {
+      const CHEAP_GREEN = '#88cc88';
+      const savings = !isCalc ? summaries[0].total - summaries[1].total : 0;
+      const show = savings > 0;
+
+      if (show) {
+        // 3-column layout
+        cartBoxes[0].position.left  = 0;
+        cartBoxes[0].position.width = '38%';
+        cartBoxes[0].position.right = undefined;
+        cartBoxes[1].position.left  = '38%';
+        cartBoxes[1].position.width = '38%';
+        cartBoxes[1].position.right = undefined;
+        savingsBox.style.border.fg = CHEAP_GREEN;
+        const savedStr   = `$${savings.toFixed(2)}`;
+        const donateAmt  = Math.ceil(savings * 0.20);
+        const donateStr  = `$${donateAmt}.00`;
+        savingsBox.setContent([
+          '',
+          ` {${CHEAP_GREEN}-fg}{bold}YOU SAVED{/}{/}`,
+          ` {${CHEAP_GREEN}-fg}{bold}${savedStr}{/}{/}`,
+          '',
+          ` {#888888-fg}vs. the First Listing{/}`,
+          '',
+          ` {#aaaaaa-fg}Consider donating ~20%:{/}`,
+          ` {#ffdd00-fg}${donateStr} ☕{/}`,
+        ].join('\n'));
+        savingsBox.show();
+        const seq = `\x1b]9999;bmc-donate=${savings.toFixed(2)}\x07`;
+        if (seq !== _lastDonateSeq) {
+          process.stdout.write(seq);
+          _lastDonateSeq = seq;
+        }
+      } else {
+        // 2-column layout
+        cartBoxes[0].position.left  = 0;
+        cartBoxes[0].position.width = '50%';
+        cartBoxes[0].position.right = undefined;
+        cartBoxes[1].position.left  = '50%';
+        cartBoxes[1].position.width = undefined;
+        cartBoxes[1].position.right = 1;
+        savingsBox.hide();
+        if (_lastDonateSeq !== 'hide') {
+          process.stdout.write('\x1b]9999;bmc-donate=hide\x07');
+          _lastDonateSeq = 'hide';
+        }
+      }
+    }
+
     function renderAll() {
+      renderSavingsBox();   // set column widths before cart boxes measure themselves
       for (let i = 0; i < 2; i++) renderCartBox(i);
       for (let c = 0; c < 2; c++) renderFilterBox(c);
       renderNotice();
@@ -2150,7 +2122,6 @@ module.exports = {
   runSplash,
   showMainScreen,
   showWelcome,
-  showGridSelect,
   showGridSelectWithSearch,
   showMultiSelect,
   showAutocomplete,
@@ -2158,8 +2129,8 @@ module.exports = {
   showTextInput,
   showFilePicker,
   showProgress,
+  showFilterProgress,
   showCartProgress,
-  showCartComparison,
   showCartResult,
   waitForKey,
   buildSummary,

@@ -15,7 +15,7 @@ def optimize(all_card_data):
         card = card_data["card_info"]["name"]
         listings = card_data["market_listings"]
         if listings:
-            best = min(listings, key=lambda l: l["total"])
+            best = min(listings, key=lambda lst: lst["total"])
             market_floor[card] = best["total"]
             floor_listing[card] = best
         else:

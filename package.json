@@ -1,29 +1,45 @@
 {
-  "name": "tcgscraper",
+  "name": "masterset",
   "version": "1.0.0",
-  "description": "TCGPlayer scraper with blessed TUI",
+  "description": "TCG cart optimizer — finds the cheapest multi-seller combination for your card list",
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "build:backend": "pyinstaller backend_server.spec --distpath dist --workpath build/pyinstaller --noconfirm",
+    "copy:playwright:mac": "python3 -c \"import pathlib,shutil; b=sorted(pathlib.Path.home().joinpath('Library','Caches','ms-playwright').glob('chromium-*'))[-1]; dest=pathlib.Path('dist/backend_server/ms-playwright')/b.name; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copytree(str(b),str(dest),dirs_exist_ok=True); print(f'Copied {b.name} -> {dest}')\"",
+    "build:mac": "npm run build:backend && npm run copy:playwright:mac && electron-builder --mac",
+    "build:win": "npm run build:backend && electron-builder --win",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "lint": "eslint electron-main.js main.js ui/"
   },
   "dependencies": {
     "blessed": "^0.1.81",
-    "electron": "^42.3.3",
     "node-pty": "^1.0.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-fit": "^0.11.0"
   },
   "devDependencies": {
+    "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
-    "electron-rebuild": "^3.2.9"
+    "@electron/rebuild": "^4.0.4",
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
   },
   "build": {
     "appId": "com.tcgscraper.app",
-    "productName": "TCGScraper",
+    "productName": "masterset",
+    "asar": false,
     "npmRebuild": true,
+    "extraResources": [
+      {
+        "from": "dist/backend_server",
+        "to": "backend_server",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "files": [
       "electron-main.js",
       "main.js",
@@ -31,8 +47,6 @@
       "backend/**",
       "renderer/**",
       "art/**",
-      "node_modules/**",
-      "!node_modules/.cache/**",
       "!venv/**",
       "!debug/**",
       "!test_cases/**",
@@ -41,10 +55,16 @@
     ],
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "icon": "build/icons/mac/icon.icns",
+      "identity": null,
+      "signIgnore": [
+        "ms-playwright"
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icons/win/icon.ico"
     }
   }
 }

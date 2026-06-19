@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.claude
 /.playwright_cart_profile
 /test_cases/user_data
 /user_data
@@ -10,3 +11,5 @@ tcgplayer_cookies.json
 .ruff_cache
 /node_modules
 /venv
+/dist
+/build/pyinstaller
