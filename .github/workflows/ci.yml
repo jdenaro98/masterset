@@ -1,4 +1,4 @@
-name: JS CI
+name: CI
 
 on:
   pull_request:
@@ -17,3 +17,11 @@ jobs:
           cache: 'npm'
       - run: npm ci --ignore-scripts
       - run: npm run lint
+
+  Ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "check ."
