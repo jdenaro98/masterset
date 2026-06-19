@@ -70,6 +70,11 @@ jobs:
       - name: Bundle Python backend (PyInstaller)
         run: pyinstaller backend_server.spec --distpath dist --workpath build/pyinstaller --noconfirm
 
+      # ── Copy Playwright Chromium into backend bundle (macOS only) ─────────────
+      - name: Copy Playwright Chromium into backend bundle
+        if: matrix.os == 'macos-latest'
+        run: npm run copy:playwright:mac
+
       # ── Electron app ──────────────────────────────────────────────────────
       - name: Build Electron app
         run: ${{ matrix.electron-cmd }}
@@ -80,6 +85,7 @@ jobs:
           # as encrypted repository secrets and remove these overrides.
           CSC_IDENTITY_AUTO_DISCOVERY: false
           CSC_LINK: ''
+          CSC_KEY_PASSWORD: ''
 
       # ── Upload installer as a workflow artifact ────────────────────────────
       - name: Upload artifact

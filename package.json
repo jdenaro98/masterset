@@ -47,8 +47,6 @@
       "backend/**",
       "renderer/**",
       "art/**",
-      "node_modules/**",
-      "!node_modules/.cache/**",
       "!venv/**",
       "!debug/**",
       "!test_cases/**",
