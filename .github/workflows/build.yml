@@ -70,10 +70,14 @@ jobs:
       - name: Bundle Python backend (PyInstaller)
         run: pyinstaller backend_server.spec --distpath dist --workpath build/pyinstaller --noconfirm
 
-      # ── Copy Playwright Chromium into backend bundle (macOS only) ─────────────
-      - name: Copy Playwright Chromium into backend bundle
+      # ── Copy Playwright Chromium into backend bundle ──────────────────────────
+      - name: Copy Playwright Chromium into backend bundle (macOS)
         if: matrix.os == 'macos-latest'
         run: npm run copy:playwright:mac
+
+      - name: Copy Playwright Chromium into backend bundle (Windows)
+        if: matrix.os == 'windows-latest'
+        run: npm run copy:playwright:win
 
       # ── Electron app ──────────────────────────────────────────────────────
       - name: Build Electron app
