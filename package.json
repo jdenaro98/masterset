@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build:backend": "pyinstaller backend_server.spec --distpath dist --workpath build/pyinstaller --noconfirm",
-    "copy:playwright:mac": "python3 -c \"import pathlib,shutil; b=sorted(pathlib.Path.home().joinpath('Library','Caches','ms-playwright').glob('chromium-*'))[-1]; dest=pathlib.Path('dist/backend_server/ms-playwright')/b.name; dest.parent.mkdir(parents=True,exist_ok=True); shutil.copytree(str(b),str(dest),dirs_exist_ok=True); print(f'Copied {b.name} -> {dest}')\"",
+    "copy:playwright:mac": "python3 scripts/copy_playwright_mac.py",
     "build:mac": "npm run build:backend && npm run copy:playwright:mac && electron-builder --mac",
     "build:win": "npm run build:backend && electron-builder --win",
     "postinstall": "electron-rebuild -f -w node-pty",
