@@ -16,7 +16,7 @@ const pending   = new Map();   // id → { resolve, reject }
 const listeners = new Map();   // type → [handler, ...]
 
 function spawnBackend() {
-  const isPackaged = process.env.TCGSCRAPER_PACKAGED === '1';
+  const isPackaged = process.env.MASTERSET_PACKAGED === '1';
   const root = path.resolve(__dirname, '..');
 
   let pythonExe, args, cwd;
@@ -24,9 +24,9 @@ function spawnBackend() {
   if (isPackaged) {
     // Use the PyInstaller-bundled binary placed in extraResources/backend_server/
     const ext = process.platform === 'win32' ? '.exe' : '';
-    pythonExe = path.join(process.env.TCGSCRAPER_RESOURCES, 'backend_server', `backend_server${ext}`);
+    pythonExe = path.join(process.env.MASTERSET_RESOURCES, 'backend_server', `backend_server${ext}`);
     args = [];
-    cwd  = process.env.TCGSCRAPER_USER_DATA || root;
+    cwd  = process.env.MASTERSET_USER_DATA || root;
   } else {
     // Dev: prefer venv Python, fall back to system python3
     const venvPy = process.platform === 'win32'
@@ -42,7 +42,7 @@ function spawnBackend() {
     cwd,
     env: {
       ...process.env,
-      TCGSCRAPER_USER_DATA: process.env.TCGSCRAPER_USER_DATA || root,
+      MASTERSET_USER_DATA: process.env.MASTERSET_USER_DATA || root,
     },
   });
 

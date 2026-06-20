@@ -74,7 +74,7 @@ def create_cart(optimized_cart, progress_callback=None):
         return None, [], None
 
     user_data_dir = os.path.join(
-        os.environ.get('TCGSCRAPER_USER_DATA') or _BASE_DIR, 'user_data'
+        os.environ.get('MASTERSET_USER_DATA') or _BASE_DIR, 'user_data'
     )
     os.makedirs(user_data_dir, exist_ok=True)
 

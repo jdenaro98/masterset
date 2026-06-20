@@ -1,4 +1,4 @@
-# PyInstaller spec for the TCGScraper Python backend.
+# PyInstaller spec for the masterset Python backend.
 #
 # Prerequisites (run once before building):
 #   pip install pyinstaller playwright requests

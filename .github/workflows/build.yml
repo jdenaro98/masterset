@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            artifact-name: TCGScraper-macOS
+            artifact-name: masterset-macOS
             artifact-path: dist/*.dmg
             electron-cmd: npx electron-builder --mac --publish never
           - os: windows-latest
-            artifact-name: TCGScraper-Windows
+            artifact-name: masterset-Windows
             artifact-path: dist/*.exe
             electron-cmd: npx electron-builder --win --publish never
 
@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install Node dependencies
@@ -79,12 +79,13 @@ jobs:
       - name: Build Electron app
         run: ${{ matrix.electron-cmd }}
         env:
-          # Disable code-signing so unsigned dev builds don't fail.
-          # To ship a signed release, set CSC_LINK + CSC_KEY_PASSWORD
-          # (macOS) or WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD (Windows)
-          # as encrypted repository secrets and remove these overrides.
+          # Ad-hoc signing ("-" identity) is used — no Apple Developer cert.
+          # App will run on Apple Silicon but Gatekeeper will still block
+          # downloads unless the user right-clicks > Open or runs:
+          #   xattr -dr com.apple.quarantine /Applications/masterset.app
+          # For notarized releases, set CSC_LINK + CSC_KEY_PASSWORD as
+          # encrypted repo secrets and remove CSC_IDENTITY_AUTO_DISCOVERY.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_KEY_PASSWORD: ''
 
       # ── Upload installer as a workflow artifact ────────────────────────────
       - name: Upload artifact

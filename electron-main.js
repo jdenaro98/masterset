@@ -49,9 +49,9 @@ app.whenReady().then(() => {
       COLORTERM:              'truecolor',
       TERM:                   'xterm-256color',
       BLESSED_FORCE_MODES:    'SGRMOUSE=1,ALLMOTION=1,VT200MOUSE=1,CELLMOTION=1',
-      TCGSCRAPER_PACKAGED:    app.isPackaged ? '1' : '',
-      TCGSCRAPER_RESOURCES:   process.resourcesPath,
-      TCGSCRAPER_USER_DATA:   app.getPath('userData'),
+      MASTERSET_PACKAGED:    app.isPackaged ? '1' : '',
+      MASTERSET_RESOURCES:   process.resourcesPath,
+      MASTERSET_USER_DATA:   app.getPath('userData'),
     };
     if (app.isPackaged) env.ELECTRON_RUN_AS_NODE = '1';
 
@@ -94,7 +94,7 @@ ipcMain.on('open-bmc-donate', (_, { amount }) => {
   const { spawn } = require('child_process');
   spawn(bin, args, {
     stdio:    'ignore',
-    env:      { ...process.env, TCGSCRAPER_USER_DATA: app.getPath('userData') },
+    env:      { ...process.env, MASTERSET_USER_DATA: app.getPath('userData') },
     detached: true,
   }).unref();
 });
