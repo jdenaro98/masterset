@@ -47,6 +47,7 @@
       "backend/**",
       "renderer/**",
       "art/**",
+      "build/icons/**",
       "!venv/**",
       "!debug/**",
       "!test_cases/**",
