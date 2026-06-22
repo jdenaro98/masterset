@@ -3,7 +3,23 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const pty  = require('node-pty');
 const path = require('path');
+const fs   = require('fs');
 const { execFileSync } = require('child_process');
+
+function logFile() {
+  try {
+    return path.join(app.getPath('userData'), 'masterset-startup.log');
+  } catch {
+    return null;
+  }
+}
+
+function writeLog(msg) {
+  const f = logFile();
+  if (f) {
+    try { fs.appendFileSync(f, `[${new Date().toISOString()}] ${msg}\n`); } catch {}
+  }
+}
 
 function resolveNodeBin() {
   // In packaged app, use the bundled Electron binary as a Node runtime
@@ -55,16 +71,32 @@ app.whenReady().then(() => {
     };
     if (app.isPackaged) env.ELECTRON_RUN_AS_NODE = '1';
 
-    ptyProcess = pty.spawn(NODE_BIN, [path.join(__dirname, 'main.js')], {
-      name: 'xterm-256color',
-      cols: 160,
-      rows: 50,
-      cwd:  __dirname,
-      env,
-    });
+    writeLog(`Spawning PTY: ${NODE_BIN} ${path.join(__dirname, 'main.js')}`);
+    writeLog(`isPackaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`);
+    writeLog(`resourcesPath=${process.resourcesPath}`);
+
+    try {
+      ptyProcess = pty.spawn(NODE_BIN, [path.join(__dirname, 'main.js')], {
+        name: 'xterm-256color',
+        cols: 160,
+        rows: 50,
+        cwd:  __dirname,
+        env,
+      });
+    } catch (err) {
+      writeLog(`pty.spawn failed: ${err.stack || err.message}`);
+      win.webContents.send('pty-data',
+        `\r\n\x1b[31m[masterset] Failed to start terminal process:\x1b[0m\r\n${err.message}\r\n\r\n` +
+        `\x1b[33mLog file: ${logFile() || '(unavailable)'}\x1b[0m\r\n`
+      );
+      return;
+    }
 
     ptyProcess.onData(data => win.webContents.send('pty-data', data));
-    ptyProcess.onExit(() => app.quit());
+    ptyProcess.onExit(({ exitCode }) => {
+      writeLog(`PTY process exited with code ${exitCode}`);
+      app.quit();
+    });
   });
 
   win.on('closed', () => {
@@ -78,7 +110,6 @@ ipcMain.on('pty-resize',   (_, { cols, rows }) => ptyProcess && ptyProcess.resiz
 ipcMain.on('fit-to-terminal', (_, { width, height }) => win && win.setContentSize(width, height));
 
 ipcMain.on('open-bmc-donate', (_, { amount }) => {
-  const fs = require('fs');
   let bin, args;
   if (app.isPackaged) {
     const ext = process.platform === 'win32' ? '.exe' : '';
