@@ -21,7 +21,7 @@ jobs:
             electron-cmd: npx electron-builder --mac --publish never
           - os: windows-latest
             artifact-name: masterset-Windows
-            artifact-path: dist/*.exe
+            artifact-path: dist/*.zip
             electron-cmd: npx electron-builder --win --publish never
 
     runs-on: ${{ matrix.os }}
