@@ -82,4 +82,9 @@ That's it. Node.js, Python, build tools, Playwright, Chromium, and a full deskto
 6. A Fluxbox desktop opens with a terminal already running in the project directory
 7. Run `npm start` in that terminal to launch the app
 
+- *Windows*: If you get a ```Command failed: docker run``` error, you may have to ensure docker WSL is defaulting to Ubuntu. Fix below:
+  - Open Docker Desktop → Settings → Resources → WSL Integration
+  - Toggle Ubuntu on
+  - Click Apply & Restart
+
 The app runs entirely inside the container's desktop — including Chromium for the cart creation feature. Everything is visible in the `localhost:6080` browser tab.

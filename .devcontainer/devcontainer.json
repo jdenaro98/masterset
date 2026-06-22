@@ -6,13 +6,18 @@
   },
   // Provides a browser-accessible desktop (noVNC on port 6080) so Electron can
   // render identically on both Mac and Windows without any host display server.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/masterset,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/masterset",
   "features": {
     "ghcr.io/devcontainers/features/desktop-lite:1": {
       "password": "vscode",
-      "webPort": 6080
+      "webPort": 6080,
+      "resolution": "1920x1080"
     }
   },
   // Electron requires extra shared memory to avoid GPU process crashes.
+  // Wake the Ubuntu WSL distro on Windows so Docker can reach its socket for the Wayland bind-mount.
+  "initializeCommand": { "windows": "wsl -d Ubuntu echo ready" },
   "runArgs": ["--shm-size=1g", "--security-opt", "seccomp=unconfined"],
   // Isolate node_modules inside a Docker volume so Linux-compiled native modules
   // (node-pty) don't overwrite the host's Windows/macOS binaries.
