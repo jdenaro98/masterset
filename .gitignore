@@ -13,3 +13,4 @@ tcgplayer_cookies.json
 /venv
 /dist
 /build/pyinstaller
+/node-runtime

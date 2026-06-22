@@ -21,9 +21,19 @@ function writeLog(msg) {
   }
 }
 
+// On Windows, Electron.exe is compiled as a /SUBSYSTEM:WINDOWS GUI application.
+// When node-pty spawns it via ConPTY the pseudoconsole handles don't connect to
+// the GUI exe's stdio, so the process runs silently. Use a bundled node.exe
+// (a /SUBSYSTEM:CONSOLE app) instead. On macOS/Linux the Electron binary works fine.
 function resolveNodeBin() {
-  // In packaged app, use the bundled Electron binary as a Node runtime
-  if (app.isPackaged) return process.execPath;
+  if (app.isPackaged) {
+    if (process.platform === 'win32') {
+      const bundled = path.join(process.resourcesPath, 'bin', 'node.exe');
+      if (fs.existsSync(bundled)) return bundled;
+    }
+    return process.execPath;
+  }
+  if (process.platform === 'win32') return 'node';
   for (const sh of ['/bin/bash', '/bin/zsh', '/bin/sh']) {
     try {
       return execFileSync(sh, ['-l', '-c', 'which node'], { encoding: 'utf8' }).trim();
@@ -32,6 +42,8 @@ function resolveNodeBin() {
   return 'node';
 }
 const NODE_BIN = resolveNodeBin();
+// Only needed when we're running the Electron binary itself as Node
+const NEEDS_ELECTRON_AS_NODE = app.isPackaged && process.platform !== 'win32';
 
 let win, ptyProcess;
 
@@ -69,7 +81,7 @@ app.whenReady().then(() => {
       MASTERSET_RESOURCES:   process.resourcesPath,
       MASTERSET_USER_DATA:   app.getPath('userData'),
     };
-    if (app.isPackaged) env.ELECTRON_RUN_AS_NODE = '1';
+    if (NEEDS_ELECTRON_AS_NODE) env.ELECTRON_RUN_AS_NODE = '1';
 
     writeLog(`Spawning PTY: ${NODE_BIN} ${path.join(__dirname, 'main.js')}`);
     writeLog(`isPackaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`);

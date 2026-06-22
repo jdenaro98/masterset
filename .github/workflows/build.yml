@@ -21,7 +21,7 @@ jobs:
             electron-cmd: npx electron-builder --mac --publish never
           - os: windows-latest
             artifact-name: masterset-Windows
-            artifact-path: dist/*.zip
+            artifact-path: dist/masterset-Windows.zip
             electron-cmd: npx electron-builder --win --publish never
 
     runs-on: ${{ matrix.os }}
@@ -79,6 +79,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: npm run copy:playwright:win
 
+      # ── Bundle node.exe for Windows PTY (Electron.exe is a GUI app and can't
+      #    be a ConPTY child; a real console-subsystem node.exe is required) ──
+      - name: Copy Node.js runtime for Windows PTY
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $nodePath = (Get-Command node).Source
+          New-Item -ItemType Directory -Force -Path node-runtime | Out-Null
+          Copy-Item $nodePath node-runtime\node.exe
+
       # ── Electron app ──────────────────────────────────────────────────────
       - name: Build Electron app
         run: ${{ matrix.electron-cmd }}
@@ -90,6 +100,14 @@ jobs:
           # For notarized releases, set CSC_LINK + CSC_KEY_PASSWORD as
           # encrypted repo secrets and remove CSC_IDENTITY_AUTO_DISCOVERY.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # ── Zip the Windows dir output into a single flat archive ─────────────
+      - name: Zip Windows build
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $src = Get-ChildItem dist -Directory | Where-Object { $_.Name -like 'masterset*win*' } | Select-Object -First 1
+          Compress-Archive -Path "$($src.FullName)\*" -DestinationPath dist\masterset-Windows.zip
 
       # ── Upload installer as a workflow artifact ────────────────────────────
       - name: Upload artifact

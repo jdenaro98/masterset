@@ -75,8 +75,14 @@
       ]
     },
     "win": {
-      "target": "zip",
-      "icon": "build/icons/win/icon.ico"
+      "target": "dir",
+      "icon": "build/icons/win/icon.ico",
+      "extraResources": [
+        {
+          "from": "node-runtime/node.exe",
+          "to": "bin/node.exe"
+        }
+      ]
     }
   }
 }
