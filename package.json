@@ -75,7 +75,7 @@
       ]
     },
     "win": {
-      "target": "nsis",
+      "target": "zip",
       "icon": "build/icons/win/icon.ico"
     }
   }
