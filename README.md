@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="build/icons/png/256x256.png" width="256" height="256" alt="MasterSet icon">
+  <img src="art/icons/png/256x256.png" width="256" height="256" alt="MasterSet icon">
 </p>
 
 # Welcome to masterset (aka TCGScraper)!!

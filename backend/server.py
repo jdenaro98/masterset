@@ -1,16 +1,9 @@
 """
-JSON-RPC-style IPC server.
+Request handlers shared by the FastAPI WebSocket server (backend/api.py).
 
-Node.js sends one JSON request per line on stdin:
-  {"id": 1, "method": "fetch_categories", "params": {}}
-
-This server writes one JSON response per line on stdout:
-  {"id": 1, "result": [...]}
-
-Progress events (no id) are also written to stdout:
-  {"type": "progress", "done": 3, "total": 10, "card": "Lightning Bolt [...]"}
-
-All logging / debug output goes to stderr so it never corrupts the protocol.
+HANDLERS maps method names to handler functions; api.py dispatches incoming
+WebSocket messages through this table and routes _send() output back over
+the socket.
 """
 
 import contextlib
@@ -19,25 +12,14 @@ import math
 import os
 import random
 import re
-import subprocess
 import sys
-import tempfile
 import threading
 import time
-import traceback
-import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Resolve the root directory for bundled assets (art/, etc.).
-# When frozen by PyInstaller, sys._MEIPASS is the extraction dir and
-# PLAYWRIGHT_BROWSERS_PATH must be set before playwright is imported.
-if getattr(sys, 'frozen', False):
-    _BASE_DIR = sys._MEIPASS
-    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', os.path.join(_BASE_DIR, 'ms-playwright'))
-else:
-    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    sys.path.insert(0, _BASE_DIR)
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _BASE_DIR)
 
 
 def _platform_ua():
@@ -67,19 +49,16 @@ import optimizer  # noqa: E402
 
 _stdout_lock = threading.Lock()
 
+# Last cart built via create_cart, exposed to the cart bookmarklet (see
+# handle_get_pending_cart) since the browser that requested cart creation
+# may not be the same browser the user is logged into TCGPlayer on.
+last_cart = {"cartKey": None, "ts": 0.0}
+
 
 def _send(obj):
     with _stdout_lock:
         sys.stdout.write(json.dumps(obj) + "\n")
         sys.stdout.flush()
-
-
-def _ok(req_id, result):
-    _send({"id": req_id, "result": result})
-
-
-def _err(req_id, msg):
-    _send({"id": req_id, "error": str(msg)})
 
 
 def _progress(**kwargs):
@@ -89,6 +68,7 @@ def _progress(**kwargs):
 def _log(msg):
     sys.stderr.write(f"[backend] {msg}\n")
     sys.stderr.flush()
+    _send({"type": "backend_log", "text": str(msg)})
 
 
 # ── color helpers (used by handle_get_theme) ──────────────────────────────────
@@ -715,7 +695,24 @@ def handle_optimize_filtered(params):
         suffix  = f" + {len(overrides) - 5} more" if len(overrides) > 5 else ""
         _log(f"filter relaxed for {len(overrides)} card(s): {preview}{suffix}")
 
-    return {"cart": optimizer.optimize(filtered_data), "overrides": overrides}
+    # Cheapest individual listing per card (no seller bundling) — shown as "First Listing" cart.
+    first_cart = []
+    for card_data in filtered_data.values():
+        name     = card_data["card_info"]["name"]
+        listings = card_data["market_listings"]
+        if listings:
+            best  = min(listings, key=lambda lst: lst["total"])
+            entry = best.copy()
+        else:
+            entry = {"seller": None, "price": 0.0, "shipping": 0.0, "total": 0.0, "sku": None}
+        entry["card"] = name
+        first_cart.append(entry)
+
+    return {
+        "cart":      optimizer.optimize(filtered_data),
+        "firstCart": first_cart,
+        "overrides": overrides,
+    }
 
 
 def handle_get_filter_options(params):
@@ -751,33 +748,36 @@ def handle_get_filter_options(params):
     return {"conditions": ordered_conditions, "sellerQuals": ordered_quals}
 
 
-_active_pw = None
-
-
 def handle_create_cart(params):
-    global _active_pw
     optimized_cart = params["optimizedCart"]
 
     def on_progress(done, total, card):
         _send({"type": "cart_progress", "done": done, "total": total, "card": card})
 
-    cookie_path, failed_items, pw = cart_create.create_cart(
+    cart_key, failed_items = cart_create.create_cart(
         optimized_cart, progress_callback=on_progress
     )
-    _active_pw = pw  # keep Playwright alive so the browser stays open
-    return {"cookiePath": cookie_path, "failedItems": failed_items}
+    if cart_key:
+        last_cart["cartKey"] = cart_key
+        last_cart["ts"] = time.time()
+    return {"cartKey": cart_key, "failedItems": failed_items}
 
 
 def handle_close_browser(params):
-    global _active_pw
-    if _active_pw:
-        try:
-            _active_pw.stop()
-        except Exception as e:
-            _log(f"Error closing browser: {e}")
-        finally:
-            _active_pw = None
     return {"ok": True}
+
+
+PENDING_CART_TTL = 900  # seconds
+
+
+def handle_get_pending_cart(params):
+    """Used by the cart bookmarklet, which runs on tcgplayer.com and connects
+    to /ws directly (a raw fetch() to us is blocked by TCGPlayer's CSP, but
+    their connect-src allows unrestricted wss:)."""
+    cart_key = last_cart["cartKey"]
+    if not cart_key or (time.time() - last_cart["ts"]) > PENDING_CART_TTL:
+        return {"cartKey": None}
+    return {"cartKey": cart_key}
 
 
 def handle_dump_listings(params):
@@ -789,130 +789,21 @@ def handle_dump_listings(params):
     return {"path": out_path, "cards": len(_cached_card_data)}
 
 
-def handle_open_bmc_donate(params):
-    """
-    Launch system Chrome at the BMC donate page and pre-fill the amount via CDP.
-    Playwright disconnects immediately after filling, leaving Chrome for the user.
-    Uses port 9223 to avoid colliding with cart_create's port 9222.
-    """
-    amount = int(params.get('amount', 1))
-    chrome_path = cart_create._system_chrome_path()
-    if not chrome_path:
-        _log("[bmc] Chrome not found — cannot open donate page")
-        return {"ok": False, "error": "Chrome not found"}
-
-    tmp_profile = tempfile.mkdtemp(prefix='masterset_bmc_')
-    subprocess.Popen(
-        [
-            chrome_path,
-            f'--user-data-dir={tmp_profile}',
-            '--remote-debugging-port=9223',
-            '--no-first-run',
-            '--no-default-browser-check',
-            'https://buymeacoffee.com/jdenaro/donate',
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    cdp_ready = False
-    for _ in range(30):
-        try:
-            urllib.request.urlopen('http://localhost:9223/json/version', timeout=1)
-            cdp_ready = True
-            break
-        except Exception:
-            time.sleep(0.5)
-
-    if not cdp_ready:
-        _log("[bmc] Chrome CDP not ready — page opened without pre-fill")
-        return {"ok": True, "prefilled": False}
-
-    pw = sync_playwright().start()
-    try:
-        browser = pw.chromium.connect_over_cdp('http://localhost:9223')
-        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-        page = ctx.pages[0] if ctx.pages else ctx.new_page()
-        page.wait_for_selector('#paymentAmount', timeout=15000)
-        page.evaluate(f"""() => {{
-            const input = document.getElementById('paymentAmount');
-            if (!input) return;
-            const setter = Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype, 'value').set;
-            setter.call(input, String({amount}));
-            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-        }}""")
-        _log(f"[bmc] Amount pre-filled: ${amount}")
-    except Exception as e:
-        _log(f"[bmc] Error filling amount: {e}")
-    finally:
-        try:
-            pw.stop()
-        except Exception:
-            pass
-
-    return {"ok": True, "prefilled": True}
-
 
 # ── dispatch table ────────────────────────────────────────────────────────────
 
 HANDLERS = {
-    "get_theme":              handle_get_theme,
-    "fetch_categories":       handle_fetch_categories,
-    "fetch_sets":             handle_fetch_sets,
-    "check_filter_cache":     handle_check_filter_cache,
-    "filter_sets":            handle_filter_sets,
-    "fetch_cards":            handle_fetch_cards,
-    "fetch_listings":         handle_fetch_listings,
-    "optimize_filtered":      handle_optimize_filtered,
-    "get_filter_options":     handle_get_filter_options,
-    "create_cart":            handle_create_cart,
-    "close_browser":          handle_close_browser,
-    "dump_listings":          handle_dump_listings,
-    "open_bmc_donate":        handle_open_bmc_donate,
+    "get_theme":          handle_get_theme,
+    "fetch_categories":   handle_fetch_categories,
+    "fetch_sets":         handle_fetch_sets,
+    "check_filter_cache": handle_check_filter_cache,
+    "filter_sets":        handle_filter_sets,
+    "fetch_cards":        handle_fetch_cards,
+    "fetch_listings":     handle_fetch_listings,
+    "optimize_filtered":  handle_optimize_filtered,
+    "get_filter_options": handle_get_filter_options,
+    "create_cart":        handle_create_cart,
+    "close_browser":      handle_close_browser,
+    "get_pending_cart":   handle_get_pending_cart,
+    "dump_listings":      handle_dump_listings,
 }
-
-# ── main loop ─────────────────────────────────────────────────────────────────
-
-
-def main():
-    # One-shot CLI mode: called by electron-main to open BMC donate in Chrome
-    for arg in sys.argv[1:]:
-        if arg.startswith('--bmc-donate='):
-            try:
-                amount = int(arg.split('=', 1)[1])
-            except (ValueError, IndexError):
-                amount = 1
-            handle_open_bmc_donate({'amount': amount})
-            return
-
-    for raw_line in sys.stdin:
-        line = raw_line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-        except json.JSONDecodeError as e:
-            _log(f"bad JSON: {e}")
-            continue
-
-        req_id = req.get("id")
-        method = req.get("method", "")
-        params = req.get("params", {})
-
-        handler = HANDLERS.get(method)
-        if handler is None:
-            _err(req_id, f"unknown method: {method}")
-            continue
-
-        try:
-            result = handler(params)
-            _ok(req_id, result)
-        except Exception as e:
-            _log(traceback.format_exc())
-            _err(req_id, str(e))
-
-
-if __name__ == "__main__":
-    main()

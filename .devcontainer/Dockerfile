@@ -1,7 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/javascript-node:22-bookworm
 
-# Python and system libraries required by Electron and Playwright Chromium.
-# Installing here (as root) avoids permission issues during postCreateCommand.
+# System libraries required by Playwright's Chromium browser.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-dev \
@@ -32,19 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libxss1 \
     libxtst6 \
-    xterm \
-    feh \
-    chromium \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy app icon for use as desktop wallpaper.
-COPY build/icons/png/512x512.png /home/node/.fluxbox/wallpaper.png
-
-# Open a terminal and set the wallpaper automatically when the Fluxbox desktop starts.
-RUN mkdir -p /home/node/.fluxbox \
-    && printf '#!/bin/bash\nfeh --bg-center /home/node/.fluxbox/wallpaper.png\nxterm -e "bash -c '\''cd /workspaces/masterset && exec bash'\''" &\nexec fluxbox\n' > /home/node/.fluxbox/startup \
-    && chmod +x /home/node/.fluxbox/startup \
-    && chown -R node:node /home/node/.fluxbox
 
 # Allow pip to install packages system-wide inside the container (PEP 668 override).
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
