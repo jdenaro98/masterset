@@ -559,12 +559,6 @@ export function showMultiSelect(items, promptText, opts = {}) {
     prompt.textContent = promptText;
     screen.appendChild(prompt);
 
-    const hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.textContent = 'space/click: toggle  •  enter: confirm  •  A: all  •  D: deselect all  •  I: invert' +
-      (hasNumbers ? '  •  Z: sort #/A-Z' : '') + '  •  R: restart  •  Q: quit';
-    screen.appendChild(hint);
-
     // Search bar
     const searchWrap = document.createElement('div');
     searchWrap.className = 'search-wrap';
@@ -588,11 +582,16 @@ export function showMultiSelect(items, promptText, opts = {}) {
     const countEl = document.createElement('span');
     countEl.className = 'count';
     bar.innerHTML = `
+      <span class="kbd"><span>Space</span> Toggle</span>
       <span class="kbd"><span>Enter</span> Confirm</span>
-      <span class="kbd"><span>S</span> Save</span>
-      <span class="kbd"><span>L</span> Load</span>
       <span class="kbd"><span>A</span> All</span>
       <span class="kbd"><span>D</span> None</span>
+      <span class="kbd"><span>I</span> Invert</span>
+      ${hasNumbers ? '<span class="kbd"><span>Z</span> Sort #/A-Z</span>' : ''}
+      <span class="kbd"><span>S</span> Save</span>
+      <span class="kbd"><span>L</span> Load</span>
+      <span class="kbd"><span>R</span> Restart</span>
+      <span class="kbd"><span>Q</span> Quit</span>
     `;
     bar.appendChild(countEl);
     screen.appendChild(bar);
