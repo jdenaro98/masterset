@@ -670,6 +670,7 @@ export function showMultiSelect(items, promptText, opts = {}) {
       const displayOrder = getDisplayOrder();
       focusIdx = Math.min(focusIdx, Math.max(0, displayOrder.length - 1));
       countEl.textContent = `${selected.size} / ${items.length} selected`;
+      if (opts.onSelectionChange) opts.onSelectionChange(toNames());
       grid.innerHTML = '';
 
       displayOrder.forEach((origIdx, displayI) => {
@@ -1399,6 +1400,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
 
     // ── Debounced re-optimization ──────────────────────────────────────────
     function scheduleOptimize() {
+      if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], sellerQuals: [...qualChecked] });
       if (debounceId) clearTimeout(debounceId);
       isCalc = true; startSpinner();
       debounceId = setTimeout(async () => {
@@ -1488,6 +1490,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       }
     });
 
+    if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], sellerQuals: [...qualChecked] });
     renderAll();
   });
 }

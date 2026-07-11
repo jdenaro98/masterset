@@ -780,6 +780,14 @@ def handle_get_pending_cart(params):
     return {"cartKey": cart_key}
 
 
+def handle_check_listings_cache(params):
+    """Return which product IDs currently have cached listings — used by the
+    frontend to fast-resume the optimizer screen after a page refresh without
+    re-scraping, falling back to a full re-fetch if the backend process was
+    restarted (and the cache is empty/stale) since the last load."""
+    return {"productIds": list(_cached_card_data.keys())}
+
+
 def handle_dump_listings(params):
     """Write the cached listings to a JSON file for optimizer debugging."""
     out_path = params.get("path") or os.path.join(os.getcwd(), "listings_debug.json")
@@ -800,6 +808,7 @@ HANDLERS = {
     "filter_sets":        handle_filter_sets,
     "fetch_cards":        handle_fetch_cards,
     "fetch_listings":     handle_fetch_listings,
+    "check_listings_cache": handle_check_listings_cache,
     "optimize_filtered":  handle_optimize_filtered,
     "get_filter_options": handle_get_filter_options,
     "create_cart":        handle_create_cart,
