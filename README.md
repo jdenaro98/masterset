@@ -19,7 +19,7 @@ This app is designed to help build master sets efficiently and cheaply by scrapi
 
     But after realizing that I'd probably go broke in the process of trying to rip my way to a master set I realized it would be way more economical to just buy the singles. But I had a dilemma. I still needed 207 out of the 351 cards and finding all of those on TCGPlayer would not only be tedious, but I'd also waste a bunch of money on shipping because I'd probably end up with 207 different sellers. That's when I found TCG's optimizer ... and how it doesn't work on Pokémon Japan :(
 
-    That's when I decided to make this and add every single automation/helper feature I could to make it as easy as possible for myself to master set and hopefully help anyone else that's in a similar situation. 
+    So I decided to make this and add every single automation/helper feature I could to make it as easy as possible for myself to master set and hopefully help anyone else that's in a similar situation. 
 
     This works regardless of TCG and dynamically pulls data from TCGPlayer's website on every run so you're always getting the freshest data, especially the seller listings. It is limited to sets that have a 'price guide' associated with them so new/old sets or obscure sets from not as popular games won't work. 
 
@@ -42,73 +42,69 @@ Thanks for stopping by and happy collecting!
 - You can scrape cards from multiple sets if desired
 - After finishing card selection, the scraper will do its work and bring you to the Dynamic Optimizer page
 
-### Optimizer
+### Dynamic Optimizer
+<p>
+  <img src="art/screenshots/dnamic_optimizer.png" width="512" height="256" alt="Dynamic Optimizer example screen">
+</p>
 - This is the bread and butter of this tool and what makes it unique! It will optimize all cards from all games/sets without limitations to languages or TCG.
 - The optimizer does an aggressive optimization based on minimizing the number of sellers (thus greatly reducing shipping costs in requests with many cards).
 - Here is where you can choose which 'cart' you'd like to add to a real TCG Player cart if you'd like!
 - You can choose to add either:
     - The baseline 'first listings' cart where it just chose the first (i.e. cheapest) listing on TCG Player for each requested card or ...
-    - The Dynamic Cart choice. This defaults to the filters of allowing only 'Near Mint' and 'Lightly Played' cards
+    - The Dynamic Cart choice. This defaults to the filters of allowing only 'Near Mint' and 'Lightly Played' cards (if that still results in a cheaper cart, if not no filters will be applied)
         - In the bottom section you can actively adjust filters to see how the dynamic optimizer changes price.
-        - When filters get too restrictive, thus preventing any seller listings from matching those conditions, you'll be greeted with warnings below as to which cards didn't meet those criteria and why
+        - When filters get too restrictive, thus preventing any seller listings from matching those conditions, you'll be provided with notices below as to which cards didn't meet those criteria and why
 - The cheapest cart will be highlighted in green, and pressing enter on your selected cart will give you the option to add these to a cart
 
 ### Adding to a Cart and Saving for Later
-- The cart create screen will send a bunch of API calls to TCG Player and utilize your native Google Chrome browser to hand over the fully created cart to you! 
+<p>
+  <img src="art/screenshots/cart_add_request.png" width="512" height="256" alt="Dynamic Optimizer example screen">
+</p>
+- The cart create screen will send a bunch of API calls to TCG Player and will create a bookmarklet for you to use to batch add everything to your TCGPlayer cart! 
+- All you have to do is have tcgplayer's website open, save the bookmarklet generated and click on it to add your selected cards to the cart.
+<p>
+  <img src="art/screenshots/add_to_cart_prompt.png" height="128" alt="Dynamic Optimizer example screen">
+</p>
 - From here you can admire the convenience, edit the cart, add new cards or start over
-- Because this is a fully functioning browser window, you'll also be able to log in to your TCG Player account so your cart will be 'saved' across browser sessions
-- You can also save these cards for later or even go through with your purchase if you'd like
-- ** Note** This app was built with safety, security, and the integrity of your personal information in mind. This is why you don't enter any credentials or payment information in the app at all! Your natively installed Google Chrome browser handles everything after we tell it what to add to the cart so there's no question of your purchase being secure or not! 
+- You can also save these cards for later or even go through with your purchase
 
-## Release Install (Win/MacOS)
+## Website
 
-Navigate to the release page and install the most recent release for your applicable Operating System! 
+- This website is hosted in two separate ways
+  - The backend is hosted by Railway
+  - The frontend is hosted by GitHub Pages
+- The stable (production) link for this app is `https://jdenaro98.github.io/masterset/`
 
-## Development/Source code installation
+## Development Via VS Code and Dev Containers
 
-
-### Via VS Code and Dev Containers
-
-#### Dependencies
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+### Dependencies
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) **Ensure docker is running (and open for macOS)**
 - [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
+### VS Code
 1. Clone the repo: `git clone https://github.com/jdenaro98/masterset.git`
 2. Open the folder in VS Code
 3. When prompted **"Reopen in Container"**, click it — or open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Dev Containers: Reopen in Container**
 4. Wait for the container to build and `postCreateCommand` to finish — this installs all dependencies and downloads Playwright Chromium. **First build only**, subsequent starts are fast.
-5. Navigate to **`localhost:6080`** in your browser and click **Connect** (if prompted for password: `vscode`)
-6. A Fluxbox desktop opens with a terminal already running in the project directory
-7. Run `npm start` in that terminal to launch the app
 
-- *Windows*: If you get a ```Command failed: docker run``` error, you may have to ensure docker WSL is defaulting to Ubuntu. Fix below:
-  - Open Docker Desktop → Settings → Resources → WSL Integration
-  - Toggle Ubuntu on
-  - Click Apply & Restart
-
-The app runs entirely inside the container's desktop — including Chromium for the cart creation feature. Everything is visible in the `localhost:6080` browser tab.
-
-### Via VS Code and Dev Containers
-
-#### Dependencies
-- python
-- node
-- Google Chrome
-- (maybe) Visual Studio Build Tools - if not installed by default on win
-
+### CLI
 1. Clone the repo: `git clone https://github.com/jdenaro98/masterset.git`
-2. Navigate to repo
-3. Create python venv
-  - ```python -m venv venv```
-4. Intialize python venv
-  - Win: ```/venv/scripts/activate.ps1``` *Must be in powershell administrator*
-  - Mac: ```source /venv/bin/activate```
-5. Install python requirements
-  - ```pip install -r requirements.txt```
-6. Initialize Playwright
-  - ```playwright install```
-7. Install node requirements
-  - ```npm install```
-7. Run `npm start` in that terminal to launch the app
+2. In a bash window in the root of the repo type `./launch_devcontainer.sh`
+    - This will launch the devcontainer in the same way that VS Code does, just in your own CLI **Must have npm devcontainers installed**
+3. Wait for the container dependencies to pull and you'll be greeted with the workspace CLI entry
 
+5. Run `npm run dev` to start the Vite backend live server
+6. Navigate to **`localhost:5173`** to access the webiste
+7. If you want to test the 'add to cart' feature, you'll also have to open a tab with `https://localhost:8000` and proceed past security warnings
+    - This is required to process the add to cart calls when developing locally, this mechanism is hosted on Railway in the production site.
 
+## Planned Features (future)
+- Optimize by character
+    - i.e. be able to masterset a specific character and choose which remaining cards you still need
+- Full mobile web app
+    - Right now the browser only kind of works natively with a mobile phone
+- Input validation to save/load feature for card selection files
+    - Right now it just validates raw against the card name from tcgplayer and would break if any cards from another set found their way into a card save file
+    - I'd like to add metadata to the card for the system to validate againts
+- Rework the app flow to be less of a linear 'one direction' type of progression and more of a browsable page
+- Add mouseover picture pop-ups to each card to more easily identify which card you're selecting
