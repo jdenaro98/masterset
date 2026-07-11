@@ -4,10 +4,9 @@
  */
 
 import './style.css';
-import { connect, call, on, off, ART_BASE } from './api.js';
+import { connect, call, on, off } from './api.js';
 import {
   applyTheme,
-  parseArtColors,
   runSplash,
   showMainScreen,
   showGridSelectWithSearch,
@@ -20,7 +19,6 @@ import {
   showCartResult,
   showConfirm,
   buildSummary,
-  calcShipping,
   showLogScreen,
   waitForKey,
 } from './ui.js';
@@ -100,7 +98,7 @@ async function mainLoop() {
       let theme;
       try {
         theme = await call('get_theme', {});
-      } catch (err) {
+      } catch (_err) {
         continue;
       }
       applyTheme(theme.primary, theme.secondary, theme.accent);
