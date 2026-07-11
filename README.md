@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="build/icons/png/256x256.png" width="256" height="256" alt="MasterSet icon">
+  <img src="art/icons/png/256x256.png" width="256" height="256" alt="MasterSet icon">
 </p>
 
 # Welcome to masterset (aka TCGScraper)!!
@@ -66,15 +66,14 @@ Navigate to the release page and install the most recent release for your applic
 
 ## Development/Source code installation
 
-### Dependencies
+
+### Via VS Code and Dev Containers
+
+#### Dependencies
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
-That's it. Node.js, Python, build tools, Playwright, Chromium, and a full desktop environment for running the app are all handled automatically inside the container and inside Fluxbox.
-
-### Installation
-
-1. Clone the repo: `git clone https://github.com/jdenaro98/masterset_tool.git`
+1. Clone the repo: `git clone https://github.com/jdenaro98/masterset.git`
 2. Open the folder in VS Code
 3. When prompted **"Reopen in Container"**, click it — or open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run **Dev Containers: Reopen in Container**
 4. Wait for the container to build and `postCreateCommand` to finish — this installs all dependencies and downloads Playwright Chromium. **First build only**, subsequent starts are fast.
@@ -82,4 +81,34 @@ That's it. Node.js, Python, build tools, Playwright, Chromium, and a full deskto
 6. A Fluxbox desktop opens with a terminal already running in the project directory
 7. Run `npm start` in that terminal to launch the app
 
+- *Windows*: If you get a ```Command failed: docker run``` error, you may have to ensure docker WSL is defaulting to Ubuntu. Fix below:
+  - Open Docker Desktop → Settings → Resources → WSL Integration
+  - Toggle Ubuntu on
+  - Click Apply & Restart
+
 The app runs entirely inside the container's desktop — including Chromium for the cart creation feature. Everything is visible in the `localhost:6080` browser tab.
+
+### Via VS Code and Dev Containers
+
+#### Dependencies
+- python
+- node
+- Google Chrome
+- (maybe) Visual Studio Build Tools - if not installed by default on win
+
+1. Clone the repo: `git clone https://github.com/jdenaro98/masterset.git`
+2. Navigate to repo
+3. Create python venv
+  - ```python -m venv venv```
+4. Intialize python venv
+  - Win: ```/venv/scripts/activate.ps1``` *Must be in powershell administrator*
+  - Mac: ```source /venv/bin/activate```
+5. Install python requirements
+  - ```pip install -r requirements.txt```
+6. Initialize Playwright
+  - ```playwright install```
+7. Install node requirements
+  - ```npm install```
+7. Run `npm start` in that terminal to launch the app
+
+

@@ -4,35 +4,22 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  // Provides a browser-accessible desktop (noVNC on port 6080) so Electron can
-  // render identically on both Mac and Windows without any host display server.
-  "features": {
-    "ghcr.io/devcontainers/features/desktop-lite:1": {
-      "password": "vscode",
-      "webPort": 6080
-    }
-  },
-  // Electron requires extra shared memory to avoid GPU process crashes.
-  "runArgs": ["--shm-size=1g", "--security-opt", "seccomp=unconfined"],
-  // Isolate node_modules inside a Docker volume so Linux-compiled native modules
-  // (node-pty) don't overwrite the host's Windows/macOS binaries.
-  "mounts": [
-    "source=masterset-node_modules,target=${containerWorkspaceFolder}/node_modules,type=volume"
-  ],
-  "forwardPorts": [6080],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/masterset,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/masterset",
+  "forwardPorts": [5173, 8000],
+  "appPort": ["5173:5173", "8000:8000"],
   "portsAttributes": {
-    "6080": {
-      "label": "Desktop",
+    "5173": {
+      "label": "Vite dev server",
       "onAutoForward": "openBrowser"
+    },
+    "8000": {
+      "label": "FastAPI backend",
+      "onAutoForward": "silent"
     }
   },
-  // desktop-lite sets DISPLAY=:1 and starts VNC automatically on container start.
-  "remoteEnv": {
-    "DISPLAY": ":1"
-  },
-  // Install all dependencies on first container create.
-  // `npm ci` triggers the postinstall electron-rebuild for node-pty (Linux).
-  "postCreateCommand": "sudo chown -R node node_modules && npm ci && node node_modules/electron/install.js && pip install -r requirements.txt && playwright install chromium && sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox",
+  // Install all deps on first create. npm ci at root gets concurrently, frontend gets Vite.
+  "postCreateCommand": "npm install && (cd frontend && npm install) && pip install -r requirements.txt && playwright install chromium",
   "customizations": {
     "vscode": {
       "settings": {

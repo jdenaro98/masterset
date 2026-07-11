@@ -1,7 +1,9 @@
 node_modules
+frontend/node_modules
 venv
 dist
-build/pyinstaller
-*.dmg
-*.exe
-*.AppImage
+__pycache__
+*.pyc
+.git
+.claude
+debug
