@@ -1,9 +1,13 @@
 node_modules
-frontend/node_modules
+frontend
 venv
 dist
 __pycache__
 *.pyc
 .git
+.github
 .claude
+.devcontainer
+.ruff_cache
+user_data
 debug
