@@ -12,7 +12,9 @@ import math
 import os
 import random
 import re
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections import Counter

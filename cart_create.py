@@ -5,6 +5,12 @@ import time
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = sys._MEIPASS
+    os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH', os.path.join(_BASE_DIR, 'ms-playwright'))
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 from playwright.sync_api import sync_playwright
 
 
