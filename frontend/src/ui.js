@@ -27,12 +27,15 @@ export function applyTheme(primary, secondary, accent) {
 
 // ── Screen management ──────────────────────────────────────────────────────
 const app = document.getElementById('app');
-let _screen   = null;
-let _keyClean = [];
+let _screen      = null;
+let _keyClean    = [];
+let _resizeClean = [];
 
 function _clearScreen() {
   _keyClean.forEach(fn => document.removeEventListener('keydown', fn));
   _keyClean = [];
+  _resizeClean.forEach(fn => window.removeEventListener('resize', fn));
+  _resizeClean = [];
   if (_screen) { _screen.remove(); _screen = null; }
 }
 
@@ -48,6 +51,24 @@ function _makeScreen() {
 function _onKey(fn) {
   document.addEventListener('keydown', fn);
   _keyClean.push(fn);
+}
+
+// Debounced resize hook so grids can re-flow their column count responsively.
+function _onResize(fn) {
+  let t = null;
+  const handler = () => { clearTimeout(t); t = setTimeout(fn, 100); };
+  window.addEventListener('resize', handler);
+  _resizeClean.push(handler);
+}
+
+// Column count for responsive item grids: 1 col on narrow/mobile widths,
+// 2 on tablet widths, up to `max` (the grid's own ceiling) on desktop.
+function _responsiveCols(max = 3) {
+  const w = window.innerWidth;
+  let cols = 3;
+  if (w < 640) cols = 1;
+  else if (w < 960) cols = 2;
+  return Math.max(1, Math.min(cols, max));
 }
 
 // ── ANSI art parser ────────────────────────────────────────────────────────
@@ -579,20 +600,28 @@ export function showMultiSelect(items, promptText, opts = {}) {
     // Action bar
     const bar = document.createElement('div');
     bar.className = 'action-bar';
+
+    function actionSpan(key, label, onClick) {
+      const el = document.createElement('span');
+      el.className = 'kbd' + (onClick ? ' clickable' : '');
+      el.innerHTML = `<span>${key}</span> ${label}`;
+      if (onClick) el.addEventListener('click', onClick);
+      return el;
+    }
+
+    bar.appendChild(actionSpan('Space', 'Toggle'));
+    bar.appendChild(actionSpan('Enter', 'Confirm', () => doConfirm()));
+    bar.appendChild(actionSpan('A', 'All', () => selectAll()));
+    bar.appendChild(actionSpan('D', 'None', () => selectNone()));
+    bar.appendChild(actionSpan('I', 'Invert', () => invertSelection()));
+    if (hasNumbers) bar.appendChild(actionSpan('Z', 'Sort #/A-Z', () => toggleSort()));
+    bar.appendChild(actionSpan('S', 'Save', () => saveCards()));
+    bar.appendChild(actionSpan('L', 'Load', () => fileInput.click()));
+    bar.appendChild(actionSpan('R', 'Restart', () => doRestart()));
+    bar.appendChild(actionSpan('Q', 'Quit', () => doQuit()));
+
     const countEl = document.createElement('span');
     countEl.className = 'count';
-    bar.innerHTML = `
-      <span class="kbd"><span>Space</span> Toggle</span>
-      <span class="kbd"><span>Enter</span> Confirm</span>
-      <span class="kbd"><span>A</span> All</span>
-      <span class="kbd"><span>D</span> None</span>
-      <span class="kbd"><span>I</span> Invert</span>
-      ${hasNumbers ? '<span class="kbd"><span>Z</span> Sort #/A-Z</span>' : ''}
-      <span class="kbd"><span>S</span> Save</span>
-      <span class="kbd"><span>L</span> Load</span>
-      <span class="kbd"><span>R</span> Restart</span>
-      <span class="kbd"><span>Q</span> Quit</span>
-    `;
     bar.appendChild(countEl);
     screen.appendChild(bar);
 
@@ -608,6 +637,7 @@ export function showMultiSelect(items, promptText, opts = {}) {
     let sortMode   = hasNumbers ? 'number' : 'alpha';
     let focusIdx   = 0;
     let query      = '';
+    let cardCols   = _responsiveCols(3);
 
     if (opts.initialSelected) {
       for (const name of opts.initialSelected) {
@@ -670,6 +700,8 @@ export function showMultiSelect(items, promptText, opts = {}) {
       focusIdx = Math.min(focusIdx, Math.max(0, displayOrder.length - 1));
       countEl.textContent = `${selected.size} / ${items.length} selected`;
       if (opts.onSelectionChange) opts.onSelectionChange(toNames());
+      cardCols = _responsiveCols(3);
+      grid.style.gridTemplateColumns = `repeat(${cardCols}, 1fr)`;
       grid.innerHTML = '';
 
       displayOrder.forEach((origIdx, displayI) => {
@@ -735,15 +767,55 @@ export function showMultiSelect(items, promptText, opts = {}) {
       reader.readAsText(file);
     });
 
+    function doConfirm()  { resolve({ action: 'confirm', selected: toNames() }); }
+    function doRestart()  { resolve({ action: 'restart', selected: [] }); }
+    function doQuit()     { resolve({ action: 'exit', selected: [] }); }
+
+    function selectAll() {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) selected.add(i);
+      render();
+    }
+
+    function selectNone() {
+      undoPrev = new Set(selected);
+      selected.clear();
+      render();
+    }
+
+    function invertSelection() {
+      undoPrev = new Set(selected);
+      for (let i = 0; i < items.length; i++) {
+        selected.has(i) ? selected.delete(i) : selected.add(i);
+      }
+      render();
+    }
+
+    function undoLast() {
+      if (undoPrev === null) return;
+      selected.clear();
+      for (const i of undoPrev) selected.add(i);
+      undoPrev = null;
+      render();
+    }
+
+    function toggleSort() {
+      if (!hasNumbers) return;
+      sortMode    = sortMode === 'number' ? 'alpha' : 'number';
+      sortedOrder = buildOrder();
+      focusIdx    = 0;
+      render();
+    }
+
     _onKey(e => {
       const displayOrder = getDisplayOrder();
 
       if (e.key === 'Enter') {
         e.preventDefault();
-        resolve({ action: 'confirm', selected: toNames() });
+        doConfirm();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        resolve({ action: 'restart', selected: [] });
+        doRestart();
       } else if (e.key === ' ') {
         // Only handle space if search isn't focused
         if (document.activeElement === searchInput) return;
@@ -757,12 +829,12 @@ export function showMultiSelect(items, promptText, opts = {}) {
       } else if (e.key === 'ArrowDown') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        focusIdx = Math.min(focusIdx + 3, displayOrder.length - 1);
+        focusIdx = Math.min(focusIdx + cardCols, displayOrder.length - 1);
         render();
       } else if (e.key === 'ArrowUp') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        focusIdx = Math.max(focusIdx - 3, 0);
+        focusIdx = Math.max(focusIdx - cardCols, 0);
         render();
       } else if (e.key === 'ArrowRight') {
         if (document.activeElement === searchInput) return;
@@ -777,12 +849,12 @@ export function showMultiSelect(items, promptText, opts = {}) {
       } else if (e.key === 'PageDown') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        focusIdx = Math.min(focusIdx + 30, displayOrder.length - 1);
+        focusIdx = Math.min(focusIdx + cardCols * 10, displayOrder.length - 1);
         render();
       } else if (e.key === 'PageUp') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        focusIdx = Math.max(focusIdx - 30, 0);
+        focusIdx = Math.max(focusIdx - cardCols * 10, 0);
         render();
       } else if (e.key === 's' || e.key === 'S') {
         if (document.activeElement === searchInput) return;
@@ -795,49 +867,35 @@ export function showMultiSelect(items, promptText, opts = {}) {
       } else if (e.key === 'a' || e.key === 'A') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        undoPrev = new Set(selected);
-        for (let i = 0; i < items.length; i++) selected.add(i);
-        render();
+        selectAll();
       } else if (e.key === 'd' || e.key === 'D') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        undoPrev = new Set(selected);
-        selected.clear();
-        render();
+        selectNone();
       } else if (e.key === 'i' || e.key === 'I') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        undoPrev = new Set(selected);
-        for (let i = 0; i < items.length; i++) {
-          selected.has(i) ? selected.delete(i) : selected.add(i);
-        }
-        render();
+        invertSelection();
       } else if (e.key === 'u' || e.key === 'U') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        if (undoPrev !== null) {
-          selected.clear();
-          for (const i of undoPrev) selected.add(i);
-          undoPrev = null;
-          render();
-        }
+        undoLast();
       } else if ((e.key === 'z' || e.key === 'Z') && hasNumbers) {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        sortMode    = sortMode === 'number' ? 'alpha' : 'number';
-        sortedOrder = buildOrder();
-        focusIdx    = 0;
-        render();
+        toggleSort();
       } else if (e.key === 'r' || e.key === 'R') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        resolve({ action: 'restart', selected: [] });
+        doRestart();
       } else if (e.key === 'q' || e.key === 'Q') {
         if (document.activeElement === searchInput) return;
         e.preventDefault();
-        resolve({ action: 'exit', selected: [] });
+        doQuit();
       }
     });
+
+    _onResize(() => render());
 
     render();
   });
@@ -1131,19 +1189,27 @@ export function waitForKey(message) {
     if (!_screen) { resolve(); return; }
 
     const bar = document.createElement('div');
-    bar.style.cssText = 'padding:6px 8px;color:#aaa;border-top:1px solid #333;';
+    bar.className = 'wait-key-bar';
     bar.textContent = message;
     _screen.appendChild(bar);
+
+    let finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('keydown', kh);
+      bar.remove();
+      resolve();
+    }
 
     const kh = e => {
       if (['Enter', ' ', 'q', 'Q'].includes(e.key)) {
         e.preventDefault();
-        document.removeEventListener('keydown', kh);
-        bar.remove();
-        resolve();
+        finish();
       }
     };
     document.addEventListener('keydown', kh);
+    bar.addEventListener('click', finish);
   });
 }
 
@@ -1224,7 +1290,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       const b = document.createElement('div');
       b.className = 'cart-box';
       b.tabIndex  = 0;
-      b.addEventListener('click', () => { if (zone === 0) { selectedCart = i; renderAll(); } });
+      b.addEventListener('click', () => { zone = 0; selectedCart = i; confirmCart(); });
       b.addEventListener('mouseenter', () => { if (zone === 0) { selectedCart = i; renderAll(); } });
       return b;
     });
@@ -1265,12 +1331,19 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
     // ── Action bar ─────────────────────────────────────────────────────────
     const actionsEl = document.createElement('div');
     actionsEl.className = 'optimizer-actions';
-    actionsEl.innerHTML = `
-      <span class="hint"><span style="color:var(--secondary)">[Enter]</span> Confirm cart</span>
-      <span class="hint"><span style="color:var(--secondary)">[Tab]</span> Switch zone</span>
-      <span class="hint"><span style="color:var(--secondary)">[R]</span> Restart</span>
-      <span class="hint"><span style="color:var(--secondary)">[Esc]</span> Home</span>
-    `;
+
+    function actionHint(key, label, onClick) {
+      const el = document.createElement('span');
+      el.className = 'hint clickable';
+      el.innerHTML = `<span style="color:var(--secondary)">[${key}]</span> ${label}`;
+      el.addEventListener('click', onClick);
+      return el;
+    }
+
+    actionsEl.appendChild(actionHint('Enter', 'Confirm cart', () => confirmCart()));
+    actionsEl.appendChild(actionHint('Tab', 'Switch zone', () => switchZone()));
+    actionsEl.appendChild(actionHint('R', 'Restart', () => doRestart()));
+    actionsEl.appendChild(actionHint('Esc', 'Home', () => goHome()));
     screen.appendChild(actionsEl);
 
     // ── Render helpers ──────────────────────────────────────────────────────
@@ -1419,12 +1492,42 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       }, 300);
     }
 
+    // ── Shared actions (keyboard + mouse) ───────────────────────────────────
+    function switchZone() {
+      zone = 1 - zone;
+      renderAll();
+    }
+
+    function confirmCart() {
+      if (selectedCart === 1 && isCalc) return;
+      const carts = [firstCart, userCart];
+      if (spinTimer) clearInterval(spinTimer);
+      if (debounceId) clearTimeout(debounceId);
+      resolve({
+        action: 'confirm',
+        cart: carts[selectedCart],
+        cartTitle: CART_TITLES[selectedCart],
+        summary: summaries[selectedCart],
+      });
+    }
+
+    function doRestart() {
+      if (spinTimer) clearInterval(spinTimer);
+      if (debounceId) clearTimeout(debounceId);
+      resolve({ action: 'restart' });
+    }
+
+    function goHome() {
+      if (spinTimer) clearInterval(spinTimer);
+      if (debounceId) clearTimeout(debounceId);
+      resolve({ action: 'home' });
+    }
+
     // ── Keyboard handling ──────────────────────────────────────────────────
     _onKey(e => {
       if (e.key === 'Tab') {
         e.preventDefault();
-        zone = 1 - zone;
-        renderAll();
+        switchZone();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         if (zone === 0) {
@@ -1466,26 +1569,13 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
         renderFilterBox(filterCol);
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (selectedCart === 1 && isCalc) return;
-        const carts = [firstCart, userCart];
-        if (spinTimer) clearInterval(spinTimer);
-        if (debounceId) clearTimeout(debounceId);
-        resolve({
-          action: 'confirm',
-          cart: carts[selectedCart],
-          cartTitle: CART_TITLES[selectedCart],
-          summary: summaries[selectedCart],
-        });
+        confirmCart();
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
-        if (spinTimer) clearInterval(spinTimer);
-        if (debounceId) clearTimeout(debounceId);
-        resolve({ action: 'restart' });
+        doRestart();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        if (spinTimer) clearInterval(spinTimer);
-        if (debounceId) clearTimeout(debounceId);
-        resolve({ action: 'home' });
+        goHome();
       }
     });
 
