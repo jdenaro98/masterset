@@ -150,7 +150,19 @@ def create_cart(optimized_cart, progress_callback=None):
                 "sku": sku,
             })
 
+        skipped_count = len(failed_items)
+
         if requests_to_make:
+            completed_count = 0
+
+            def _on_item_settled(result):
+                nonlocal completed_count
+                completed_count += 1
+                if progress_callback:
+                    progress_callback(skipped_count + completed_count, total, result.get("card", ""))
+
+            page.expose_function("__reportCartProgress", _on_item_settled)
+
             batch_js = """
             async (items) => {
                 const results = await Promise.allSettled(
@@ -168,7 +180,16 @@ def create_cart(optimized_cart, progress_callback=None):
                             status: r.status,
                             card: item.card,
                             sku: item.sku,
-                        }))
+                        })).catch(err => ({
+                            ok: false,
+                            status: 0,
+                            card: item.card,
+                            sku: item.sku,
+                            error: String(err),
+                        })).then(async out => {
+                            try { await window.__reportCartProgress(out); } catch (e) {}
+                            return out;
+                        })
                     )
                 );
                 return results.map((r, i) =>
@@ -184,15 +205,13 @@ def create_cart(optimized_cart, progress_callback=None):
                 _log(f"Batch add failed: {e}")
                 results = [{"ok": False, "status": 0, "card": r["card"], "sku": r["sku"], "error": str(e)} for r in requests_to_make]
 
-            for i, result in enumerate(results):
+            for result in results:
                 card_name = result["card"]
                 sku = result["sku"]
                 if not result["ok"]:
                     reason = result.get("error") or f"HTTP {result['status']} (dead listing or out of stock)"
                     _log(f"Failed to add {card_name}: {reason}")
                     failed_items.append({"card": card_name, "sku": sku, "reason": reason})
-                if progress_callback:
-                    progress_callback(len(failed_items) + (i + 1), total, card_name)
 
         if failed_items:
             _log(f"{len(failed_items)} item(s) could not be added automatically.")
