@@ -84,6 +84,8 @@ html, body {
   font-size: var(--fs);
   padding: 3px 8px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   white-space: nowrap;
 }
 .search-wrap .refresh-btn:hover { color: var(--primary); background: #111; }
@@ -102,6 +104,8 @@ html, body {
   padding: 1px 8px;
   color: var(--secondary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -128,6 +132,8 @@ html, body {
   padding: 1px 8px;
   color: var(--secondary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -155,6 +161,8 @@ html, body {
   padding: 1px 6px;
   color: var(--secondary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -288,6 +296,8 @@ html, body {
   border: 1px solid #333;
   padding: 4px 8px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   min-height: 9em;
   user-select: none;
 }
@@ -344,6 +354,8 @@ html, body {
   padding: 1px 4px;
   color: var(--secondary);
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   user-select: none;
   font-size: 13px;
 }
@@ -422,6 +434,8 @@ html, body {
   font-size: var(--fs);
   padding: 2px 20px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .modal-btn.focused, .modal-btn:hover { background: #fff; color: #000; border-color: #fff; }
 
@@ -512,6 +526,8 @@ html, body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   gap: 6px;
 }
 
@@ -543,6 +559,8 @@ html, body {
   border: 1px solid #333;
   padding: 4px 8px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .main-logo-box.focused { border-color: var(--primary); }
 .main-logo-box canvas  { display: block; max-width: 100%; }
@@ -565,6 +583,8 @@ html, body {
   font-size: var(--fs);
   color: #555;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   padding: 0 4px;
 }
 .main-btn.focused, .main-btn:hover { background: #fff; color: #000; }
@@ -590,3 +610,27 @@ html, body {
 }
 .bmc-bar a:hover { text-decoration: underline; }
 .bmc-bar .bmc-label { color: var(--muted); font-size: 12px; }
+
+/* ── touch targets ────────────────────────────────────────────────────── */
+/* Coarse (finger) pointers get bigger hit areas on rows/buttons/hints than
+   the compact mouse-oriented defaults above. */
+@media (pointer: coarse) {
+  .list-item, .grid-item, .card-item, .filter-item {
+    padding: 8px 10px;
+    font-size: 15px;
+  }
+
+  .action-bar { gap: 16px; padding: 8px 10px; }
+  .action-bar .kbd.clickable { padding: 8px 6px; font-size: 14px; }
+  .action-bar .kbd.clickable span { font-size: 13px; padding: 2px 6px; }
+
+  .optimizer-actions { gap: 18px; padding: 8px 10px; }
+  .optimizer-actions .hint.clickable { padding: 8px 6px; font-size: 14px; }
+
+  .wait-key-bar { padding: 14px 10px; }
+
+  .search-wrap .refresh-btn { padding: 10px 12px; }
+
+  .modal-btn { padding: 10px 24px; font-size: 15px; }
+  .main-btn { padding: 8px 14px; font-size: 15px; }
+}

@@ -25,6 +25,12 @@ export function applyTheme(primary, secondary, accent) {
   document.getElementById('app').style.borderColor = PRIMARY;
 }
 
+// True on mice/trackpads, false on touchscreens. Hover-preview handlers are
+// gated on this: on touch, a tap synthesizes mouseenter+click in the same
+// gesture, and re-rendering (swapping DOM nodes) between them makes the
+// browser drop the click entirely, so touch must skip straight to tapping.
+const HOVER_CAPABLE = window.matchMedia('(hover: hover)').matches;
+
 // ── Screen management ──────────────────────────────────────────────────────
 const app = document.getElementById('app');
 let _screen      = null;
@@ -350,7 +356,7 @@ export function showGridSelectWithSearch(items, promptText, opts = {}) {
           el.className = 'list-item' + (i === focusIdx ? ' focused' : '');
           el.textContent = item;
           el.addEventListener('click', () => { focusIdx = i; resolve(filtered[i]); });
-          el.addEventListener('mouseenter', () => { focusIdx = i; render(); });
+          el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; focusIdx = i; render(); });
           grid.appendChild(el);
         });
         // Scroll focused into view
@@ -378,7 +384,7 @@ export function showGridSelectWithSearch(items, promptText, opts = {}) {
             const capturedLinear = linearIdx;
             const capturedItem   = items[idx];
             el.addEventListener('click', () => resolve(capturedItem));
-            el.addEventListener('mouseenter', () => { focusIdx = capturedLinear; render(); });
+            el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; focusIdx = capturedLinear; render(); });
             grid.appendChild(el);
           }
         }
@@ -521,7 +527,7 @@ export function showAutocomplete(choices, promptText, opts = {}) {
         el.className = 'list-item' + (i === focusIdx ? ' focused' : '');
         el.textContent = item;
         el.addEventListener('click', () => resolve(item));
-        el.addEventListener('mouseenter', () => { focusIdx = i; render(); });
+        el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; focusIdx = i; render(); });
         list.appendChild(el);
       });
       const focusedEl = list.children[focusIdx];
@@ -718,7 +724,7 @@ export function showMultiSelect(items, promptText, opts = {}) {
           selected.has(origIdx) ? selected.delete(origIdx) : selected.add(origIdx);
           render();
         });
-        el.addEventListener('mouseenter', () => { focusIdx = displayI; render(); });
+        el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; focusIdx = displayI; render(); });
         grid.appendChild(el);
       });
 
@@ -1291,7 +1297,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       b.className = 'cart-box';
       b.tabIndex  = 0;
       b.addEventListener('click', () => { zone = 0; selectedCart = i; confirmCart(); });
-      b.addEventListener('mouseenter', () => { if (zone === 0) { selectedCart = i; renderAll(); } });
+      b.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; if (zone === 0) { selectedCart = i; renderAll(); } });
       return b;
     });
 
@@ -1435,7 +1441,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
           scheduleOptimize();
           renderAll();
         });
-        el.addEventListener('mouseenter', () => { filterRows[col] = idx; renderFilterBox(col); });
+        el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; filterRows[col] = idx; renderFilterBox(col); });
         box.appendChild(el);
       });
     }
