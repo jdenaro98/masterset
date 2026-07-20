@@ -10,7 +10,22 @@
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <!-- Persistent nav chrome: a child of #app that survives screen swaps
+         (_makeScreen only removes the old .screen). Sits above screens but below
+         modals. Home (top-left) is hidden on the home screen; Binder (top-right) is
+         hidden on the binder page. Wired up by the NavController in app.js. -->
+    <div id="nav-chrome">
+      <button id="nav-home" class="nav-icon nav-home" title="Home" aria-label="Home" hidden>
+        <span class="nav-icon-glyph">⌂</span>
+      </button>
+      <button id="nav-binder" class="nav-icon nav-binder" title="Binder" aria-label="Binder" hidden>
+        <span class="nav-icon-glyph">▤</span>
+        <span class="nav-icon-label">Binder</span>
+        <span id="nav-binder-badge" class="nav-badge" hidden>0</span>
+      </button>
+    </div>
+  </div>
   <script type="module" src="/src/app.js"></script>
 </body>
 </html>

@@ -37,11 +37,46 @@ let _screen      = null;
 let _keyClean    = [];
 let _resizeClean = [];
 
+// Global nav chrome (home/binder icons) interrupts the active screen by resolving
+// its promise with a { __nav } sentinel. Each interruptible screen registers its
+// resolver via _navScreen(); triggerScreenNav (called by app.js's NavController)
+// fires it. Cleared on every screen swap so a click between screens is a no-op.
+let _activeNavResolve = null;
+let _keyPaused        = false;
+
+function _navScreen(resolve) {
+  _activeNavResolve = target => { _activeNavResolve = null; resolve({ __nav: target }); };
+}
+
+// Called by app.js when a nav icon is clicked. Returns true if a screen was
+// listening (and has now been asked to navigate), false if none is active.
+export function triggerScreenNav(target) {
+  const fn = _activeNavResolve;
+  if (!fn) return false;
+  fn(target);
+  return true;
+}
+
+// Temporarily detach the active screen's key handlers while a modal (e.g. the nav
+// guard confirm) is open, so the screen underneath doesn't also act on Enter/arrows.
+export function pauseScreenKeys() {
+  if (_keyPaused) return;
+  _keyClean.forEach(fn => document.removeEventListener('keydown', fn));
+  _keyPaused = true;
+}
+export function resumeScreenKeys() {
+  if (!_keyPaused) return;
+  _keyClean.forEach(fn => document.addEventListener('keydown', fn));
+  _keyPaused = false;
+}
+
 function _clearScreen() {
   _keyClean.forEach(fn => document.removeEventListener('keydown', fn));
   _keyClean = [];
   _resizeClean.forEach(fn => window.removeEventListener('resize', fn));
   _resizeClean = [];
+  _activeNavResolve = null;
+  _keyPaused = false;
   if (_screen) { _screen.remove(); _screen = null; }
 }
 
@@ -227,6 +262,7 @@ export async function showMainScreen() {
   return new Promise(resolve => {
     const screen = _makeScreen();
     screen.className = 'screen main-screen';
+    _navScreen(resolve);
 
     const welcome = document.createElement('div');
     welcome.className = 'main-welcome';
@@ -300,6 +336,7 @@ export function showGridSelectWithSearch(items, promptText, opts = {}) {
   return new Promise(resolve => {
     const screen = _makeScreen();
     screen.className = 'screen';
+    _navScreen(resolve);
 
     const prompt = document.createElement('div');
     prompt.className = 'prompt';
@@ -484,6 +521,7 @@ export function showAutocomplete(choices, promptText, opts = {}) {
   return new Promise(resolve => {
     const screen = _makeScreen();
     screen.className = 'screen';
+    _navScreen(resolve);
 
     const prompt = document.createElement('div');
     prompt.className = 'prompt';
@@ -577,6 +615,7 @@ export function showMultiSelect(items, promptText, opts = {}) {
   return new Promise(resolve => {
     const screen = _makeScreen();
     screen.className = 'screen';
+    _navScreen(resolve);
 
     const itemMeta   = opts.itemMeta || null;
     const hasNumbers = !!(itemMeta && itemMeta.some(m => m && m.number));
@@ -1208,6 +1247,10 @@ export function waitForKey(message) {
       resolve();
     }
 
+    // Let the persistent nav icons (e.g. Home on the empty-binder screen) resolve
+    // this wait too, not just Enter/click — otherwise a click there is a silent no-op.
+    _navScreen(() => finish());
+
     const kh = e => {
       if (['Enter', ' ', 'q', 'Q'].includes(e.key)) {
         e.preventDefault();
@@ -1243,11 +1286,18 @@ export function buildSummary(cart) {
   return { cards: cart.length, sellers: sellers.size, rawCost, shipping, total: rawCost + shipping };
 }
 
-// ── Dynamic optimizer screen ───────────────────────────────────────────────
-export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defaultFilters = {}, extra = {}) {
+// ── Binder page (the dynamic optimizer, now the binder's landing screen) ────
+// Adapted from the original single-set optimizer. Additions: a live per-card list of
+// the binder's contents (name · set · price · delete) in place of the old inline
+// notice box; the filter-relaxation notices moved behind a badge button; and
+// refresh / clear-all actions. Filter toggles and per-card deletes re-optimize in
+// place (scoped to the current binder card ids); refresh and clear-all resolve an
+// action that app.js drives (they need a scrape progress screen / empty state).
+export function showBinder(firstCart, defaultCart, filterOptions, defaultFilters = {}, extra = {}) {
   return new Promise(resolve => {
     const screen = _makeScreen();
-    screen.className = 'screen optimizer';
+    screen.className = 'screen optimizer binder';
+    _navScreen(resolve);
 
     const CONDITIONS  = filterOptions.conditions  || [];
     const QUALS       = filterOptions.sellerQuals || [];
@@ -1258,17 +1308,22 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
     const condChecked  = new Set(defaultConds.filter(c => CONDITIONS.includes(c)));
     const qualChecked  = new Set(defaultQuals.filter(q => QUALS.includes(q)));
 
-    const totalCards = extra.totalCards ?? firstCart.length;
+    // Live, mutable binder state. `cards` mirrors the binder localStorage entries
+    // ({ id, displayName, setName, ... }); firstCartCur/userCart hold the latest
+    // optimize result so per-card prices and totals track deletes + filter changes.
+    let cards            = (extra.cards || []).slice();
+    let firstCartCur     = firstCart;
     let userCart         = defaultCart;
     let currentOverrides = extra.initialOverrides || [];
     const backendLogs    = [];
     let isCalc           = false;
     let debounceId       = null;
+    let noticesOpen      = false;
 
-    if (extra.onLog) extra.onLog(text => { backendLogs.push(text); renderNotice(); });
+    if (extra.onLog) extra.onLog(text => { backendLogs.push(text); renderNoticesBadge(); if (noticesOpen) renderNoticesPanel(); });
 
     const summaries = [
-      { ...buildSummary(firstCart), cards: totalCards },
+      { ...buildSummary(firstCartCur), cards: cards.length },
       buildSummary(userCart),
     ];
 
@@ -1281,7 +1336,6 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
     // ── Description & hint ─────────────────────────────────────────────────
     const desc = document.createElement('div');
     desc.className = 'optimizer-desc';
-    desc.textContent = 'Select a cart below, or adjust filters to rebuild the optimized cart.';
     screen.appendChild(desc);
 
     const hintEl = document.createElement('div');
@@ -1325,14 +1379,23 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
     });
     screen.appendChild(filterRow);
 
-    // ── Notice box ─────────────────────────────────────────────────────────
-    const noticeBox = document.createElement('div');
-    noticeBox.className = 'notice-box';
-    const noticeTitle = document.createElement('div');
-    noticeTitle.className = 'notice-title';
-    noticeTitle.textContent = 'Notices';
-    noticeBox.appendChild(noticeTitle);
-    screen.appendChild(noticeBox);
+    // ── Binder card list (takes the old notice box's space) ────────────────
+    const listWrap = document.createElement('div');
+    listWrap.className = 'binder-list-wrap';
+    const listHead = document.createElement('div');
+    listHead.className = 'binder-list-head';
+    listWrap.appendChild(listHead);
+    const listGrid = document.createElement('div');
+    listGrid.className = 'binder-list';
+    listGrid.style.gridTemplateColumns = `repeat(${_responsiveCols(3)}, 1fr)`;
+    listWrap.appendChild(listGrid);
+    screen.appendChild(listWrap);
+    _onResize(() => { listGrid.style.gridTemplateColumns = `repeat(${_responsiveCols(3)}, 1fr)`; });
+
+    // ── Notices panel (hidden until toggled from the action bar) ───────────
+    const noticesPanel = document.createElement('div');
+    noticesPanel.className = 'notices-panel';
+    screen.appendChild(noticesPanel);
 
     // ── Action bar ─────────────────────────────────────────────────────────
     const actionsEl = document.createElement('div');
@@ -1346,9 +1409,15 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       return el;
     }
 
+    const noticesBtn = document.createElement('span');
+    noticesBtn.className = 'hint clickable notices-btn';
+    noticesBtn.addEventListener('click', () => toggleNotices());
+
     actionsEl.appendChild(actionHint('Enter', 'Confirm cart', () => confirmCart()));
     actionsEl.appendChild(actionHint('Tab', 'Switch zone', () => switchZone()));
-    actionsEl.appendChild(actionHint('R', 'Restart', () => doRestart()));
+    actionsEl.appendChild(noticesBtn);
+    actionsEl.appendChild(actionHint('F', 'Refresh prices', () => doRefresh()));
+    actionsEl.appendChild(actionHint('C', 'Clear binder', () => doClear()));
     actionsEl.appendChild(actionHint('Esc', 'Home', () => goHome()));
     screen.appendChild(actionsEl);
 
@@ -1438,7 +1507,7 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
         el.addEventListener('click', () => {
           filterCol = col; zone = 1; filterRows[col] = idx;
           if (checked.has(item)) checked.delete(item); else checked.add(item);
-          scheduleOptimize();
+          reoptimize();
           renderAll();
         });
         el.addEventListener('mouseenter', () => { if (!HOVER_CAPABLE) return; filterRows[col] = idx; renderFilterBox(col); });
@@ -1446,56 +1515,145 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       });
     }
 
-    function renderNotice() {
-      while (noticeBox.children.length > 1) noticeBox.removeChild(noticeBox.lastChild);
+    // Price of a card in the currently selected cart, keyed by the stable cardId the
+    // backend now stamps on every cart entry (so duplicate names never mismap).
+    function priceForCard(id) {
+      const cart = selectedCart === 0 ? firstCartCur : userCart;
+      const e = cart.find(x => x.cardId === id);
+      if (!e || e.seller == null) return null;
+      return e.price || 0;
+    }
+
+    function renderList() {
+      listHead.textContent = `Binder — ${cards.length} card${cards.length === 1 ? '' : 's'}`;
+      listGrid.innerHTML = '';
+      for (const c of cards) {
+        const row = document.createElement('div');
+        row.className = 'binder-card';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'binder-card-name';
+        nameEl.textContent = c.displayName;
+        nameEl.title = c.displayName;
+
+        const setEl = document.createElement('span');
+        setEl.className = 'binder-card-set';
+        setEl.textContent = c.setName || '';
+        setEl.title = c.setName || '';
+
+        const price = priceForCard(c.id);
+        const priceEl = document.createElement('span');
+        priceEl.className = 'binder-card-price';
+        priceEl.textContent = price == null ? '—' : `$${price.toFixed(2)}`;
+
+        const del = document.createElement('span');
+        del.className = 'binder-card-del';
+        del.textContent = '✕';
+        del.title = 'Remove from binder';
+        del.addEventListener('click', () => deleteCard(c.id));
+
+        row.appendChild(nameEl);
+        row.appendChild(setEl);
+        row.appendChild(priceEl);
+        row.appendChild(del);
+        listGrid.appendChild(row);
+      }
+    }
+
+    function renderNoticesBadge() {
+      const n = currentOverrides.length;
+      noticesBtn.innerHTML =
+        `<span style="color:var(--secondary)">[N]</span> Notices` +
+        (n > 0 ? ` <span class="notices-bubble">${n}</span>` : '');
+    }
+
+    function renderNoticesPanel() {
+      noticesPanel.classList.toggle('show', noticesOpen);
+      if (!noticesOpen) return;
+      noticesPanel.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'notices-panel-title';
+      title.textContent = 'Notices — filters relaxed for these cards';
+      noticesPanel.appendChild(title);
+      if (!currentOverrides.length && !backendLogs.length) {
+        const el = document.createElement('div');
+        el.className = 'notice-debug';
+        el.textContent = 'No relaxations — every card matched your filters.';
+        noticesPanel.appendChild(el);
+      }
       for (const o of currentOverrides) {
         const el = document.createElement('div');
         el.className = 'notice-warn';
         el.textContent = `⚠ ${o.name}: ${o.applied}`;
-        noticeBox.appendChild(el);
+        noticesPanel.appendChild(el);
       }
       for (const line of backendLogs) {
         const el = document.createElement('div');
         el.className = 'notice-debug';
         el.textContent = line;
-        noticeBox.appendChild(el);
+        noticesPanel.appendChild(el);
       }
     }
 
+    function toggleNotices() { noticesOpen = !noticesOpen; renderNoticesPanel(); }
+
     function renderHint() {
       hintEl.textContent = zone === 0
-        ? 'CARTS  ←/→ navigate  •  Enter confirm  •  Tab: go to filters  •  R restart  •  Esc home'
-        : 'FILTERS  ←/→ columns  •  ↑/↓ navigate  •  Space toggle  •  Tab: go to carts  •  R restart  •  Esc home';
+        ? 'CARTS  ←/→ navigate  •  Enter confirm  •  Tab: filters  •  N notices  •  F refresh  •  C clear  •  Esc home'
+        : 'FILTERS  ←/→ columns  •  ↑/↓ navigate  •  Space toggle  •  Tab: carts  •  Esc home';
     }
 
     function renderAll() {
+      desc.textContent = 'Choose a cart, tune filters, or manage the cards in your binder below.';
       renderSavings();
       renderCartBox(0); renderCartBox(1);
       renderFilterBox(0); renderFilterBox(1);
-      renderNotice();
+      renderList();
+      renderNoticesBadge();
+      renderNoticesPanel();
       renderHint();
     }
 
-    // ── Debounced re-optimization ──────────────────────────────────────────
-    function scheduleOptimize() {
-      if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], sellerQuals: [...qualChecked] });
+    // ── Re-optimize, scoped to the binder's current card ids ───────────────
+    function currentCardIds() { return cards.map(c => c.id); }
+
+    function reoptimize({ immediate = false } = {}) {
+      if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], quals: [...qualChecked] });
       if (debounceId) clearTimeout(debounceId);
       isCalc = true; startSpinner();
-      debounceId = setTimeout(async () => {
+      const run = async () => {
         try {
           const result = await call('optimize_filtered', {
             conditions:  [...condChecked],
             sellerQuals: [...qualChecked],
+            cardIds:     currentCardIds(),
           });
-          userCart         = result.cart;
+          userCart         = result.cart || [];
+          firstCartCur     = result.firstCart || firstCartCur;
           currentOverrides = result.overrides || [];
+          summaries[0]     = { ...buildSummary(firstCartCur), cards: cards.length };
           summaries[1]     = buildSummary(userCart);
         } catch (_) {}
         finally {
           isCalc = false; stopSpinner();
           renderAll();
         }
-      }, 300);
+      };
+      if (immediate) run(); else debounceId = setTimeout(run, 300);
+    }
+
+    function cleanupTimers() {
+      if (spinTimer) clearInterval(spinTimer);
+      if (debounceId) clearTimeout(debounceId);
+    }
+
+    // ── Per-card delete ────────────────────────────────────────────────────
+    function deleteCard(id) {
+      cards = cards.filter(c => c.id !== id);
+      if (extra.onDeleteCard) extra.onDeleteCard(id);
+      if (!cards.length) { cleanupTimers(); resolve({ action: 'empty' }); return; }
+      renderList();               // instant visual removal
+      reoptimize({ immediate: true });
     }
 
     // ── Shared actions (keyboard + mouse) ───────────────────────────────────
@@ -1506,9 +1664,8 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
 
     function confirmCart() {
       if (selectedCart === 1 && isCalc) return;
-      const carts = [firstCart, userCart];
-      if (spinTimer) clearInterval(spinTimer);
-      if (debounceId) clearTimeout(debounceId);
+      const carts = [firstCartCur, userCart];
+      cleanupTimers();
       resolve({
         action: 'confirm',
         cart: carts[selectedCart],
@@ -1517,20 +1674,14 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
       });
     }
 
-    function doRestart() {
-      if (spinTimer) clearInterval(spinTimer);
-      if (debounceId) clearTimeout(debounceId);
-      resolve({ action: 'restart' });
-    }
-
-    function goHome() {
-      if (spinTimer) clearInterval(spinTimer);
-      if (debounceId) clearTimeout(debounceId);
-      resolve({ action: 'home' });
-    }
+    function doRefresh() { cleanupTimers(); resolve({ action: 'refresh' }); }
+    function doClear()   { cleanupTimers(); resolve({ action: 'clear' }); }
+    function goHome()    { cleanupTimers(); resolve({ action: 'home' }); }
 
     // ── Keyboard handling ──────────────────────────────────────────────────
     _onKey(e => {
+      // While the notices panel is open, Esc closes it rather than leaving the page.
+      if (noticesOpen && e.key === 'Escape') { e.preventDefault(); noticesOpen = false; renderNoticesPanel(); return; }
       if (e.key === 'Tab') {
         e.preventDefault();
         switchZone();
@@ -1571,21 +1722,27 @@ export function showDynamicOptimizer(firstCart, defaultCart, filterOptions, defa
         const item    = items[filterRows[filterCol]];
         if (!item) return;
         if (checked.has(item)) checked.delete(item); else checked.add(item);
-        scheduleOptimize();
+        reoptimize();
         renderFilterBox(filterCol);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         confirmCart();
-      } else if (e.key === 'r' || e.key === 'R') {
+      } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
-        doRestart();
+        toggleNotices();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        doRefresh();
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        doClear();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         goHome();
       }
     });
 
-    if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], sellerQuals: [...qualChecked] });
+    if (extra.onFiltersChange) extra.onFiltersChange({ conditions: [...condChecked], quals: [...qualChecked] });
     renderAll();
   });
 }

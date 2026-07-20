@@ -1,10 +1,18 @@
 'use strict';
 /**
- * Application flow — mirrors main.js orchestration, now browser-native.
+ * Application flow — home → game → set → card select → binder.
+ *
+ * The old single-pass funnel ended at a per-set optimizer + cart handoff. Now card
+ * selection feeds a persistent **binder** (see binder.js): the user picks cards from
+ * any number of sets/games, and the binder page (the former dynamic optimizer) is the
+ * single landing spot where the whole binder is priced, filtered, and handed off to a
+ * TCGPlayer cart. Global home/binder nav icons (NavController) let the user jump
+ * between the flow and the binder from anywhere.
  */
 
 import './style.css';
 import { connect, call, on, off } from './api.js';
+import * as binder from './binder.js';
 import {
   applyTheme,
   runSplash,
@@ -14,22 +22,25 @@ import {
   showMultiSelect,
   showProgress,
   showFilterProgress,
-  showDynamicOptimizer,
+  showBinder,
   showCartProgress,
   showCartResult,
   showConfirm,
   buildSummary,
   showLogScreen,
   waitForKey,
+  triggerScreenNav,
+  pauseScreenKeys,
+  resumeScreenKeys,
 } from './ui.js';
 
 // ── Flow-state persistence ──────────────────────────────────────────────────
-// Refreshing the browser while mid-flow (picking cards, tuning the optimizer)
-// should drop the user back where they were rather than restarting the whole
-// app. We snapshot just enough to resume — game/set ids, the in-progress card
-// selection, or the confirmed cart + filters — to sessionStorage, so it's
-// scoped to this tab/session and never outlives it. The home screen always
-// clears this, so refreshing there still replays the splash as before.
+// Refreshing the browser mid-flow (picking cards) should drop the user back where
+// they were rather than restarting. We snapshot just enough to resume — game/set ids
+// and the in-progress card selection — to sessionStorage (tab-scoped, never outlives
+// the tab). The home screen always clears it. A `{ step: 'binder' }` marker means the
+// user was on the binder page, so a refresh there resumes the binder (whose contents
+// live durably in localStorage, not here).
 const FLOW_STATE_KEY = 'masterset:flowState';
 
 function saveFlowState(state) {
@@ -45,9 +56,61 @@ function clearFlowState() {
   try { sessionStorage.removeItem(FLOW_STATE_KEY); } catch (_) {}
 }
 
+// ── Nav chrome controller ────────────────────────────────────────────────────
+// Owns the persistent home/binder icons (declared in index.html, outside #app so
+// they survive screen swaps). A click resolves the active screen's promise with a
+// { __nav } sentinel via triggerScreenNav; during the selection flow a guard confirm
+// protects unsaved progress first.
+const NavController = {
+  homeBtn:   null,
+  binderBtn: null,
+  badge:     null,
+  guard:     false,
+
+  init() {
+    this.homeBtn   = document.getElementById('nav-home');
+    this.binderBtn = document.getElementById('nav-binder');
+    this.badge     = document.getElementById('nav-binder-badge');
+    this.homeBtn.addEventListener('click',   () => this._go('home',   'Home'));
+    this.binderBtn.addEventListener('click', () => this._go('binder', 'Binder'));
+    this.updateBadge();
+  },
+
+  configure({ home = false, binder: showBinderIcon = false, guard = false } = {}) {
+    if (this.homeBtn)   this.homeBtn.hidden   = !home;
+    if (this.binderBtn) this.binderBtn.hidden = !showBinderIcon;
+    this.guard = guard;
+    this.updateBadge();
+  },
+
+  updateBadge() {
+    if (!this.badge) return;
+    const n = binder.binderCount();
+    this.badge.textContent = String(n);
+    this.badge.hidden = n === 0;
+  },
+
+  async _go(target, label) {
+    if (this.guard) {
+      // Detach the underlying screen's key handlers so its Enter doesn't also fire
+      // while the guard modal is open, then restore them if the user stays.
+      pauseScreenKeys();
+      const ok = await showConfirm(`Leave your current selection and go to ${label}?`);
+      resumeScreenKeys();
+      if (!ok) return;
+    }
+    triggerScreenNav(target);
+  },
+};
+
+// A nav-sentinel { __nav } from an interruptible screen maps to a flow outcome.
+function navOutcome(nav) { return nav === 'binder' ? 'binder' : 'home'; }
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 async function boot() {
+  NavController.init();
   const resumeState = loadFlowState();
+  NavController.configure({ home: false, binder: false });
   const log = showLogScreen('Connecting to masterset backend…');
 
   try {
@@ -64,8 +127,13 @@ async function boot() {
 
   // Mid-flow refresh: skip the splash/home screen and jump straight back in.
   if (resumeState) {
+    if (resumeState.step === 'binder') {
+      await runBinder();
+      return mainLoop();
+    }
     const result = await runCardSelection(resumeState);
     if (result === 'exit') { clearFlowState(); showExitScreen(); return; }
+    if (result === 'binder') await runBinder();
     return mainLoop();
   }
 
@@ -88,13 +156,19 @@ async function boot() {
 // ── Main loop (home screen → game select → set select → ...) ──────────────
 async function mainLoop() {
   while (true) {
-    // Being at the home screen means no flow is in progress — clearing here
-    // (rather than at every exit point above) is the one choke point that
-    // guarantees a home-screen refresh always replays the splash.
+    // Being at the home screen means no flow is in progress — clearing here is the
+    // one choke point that guarantees a home-screen refresh always replays the splash.
     clearFlowState();
+    NavController.configure({ home: false, binder: true, guard: false });
     const action = await showMainScreen();
+
+    if (action && action.__nav) {
+      if (action.__nav === 'binder') await runBinder();
+      continue;                                   // 'home' from home = stay
+    }
     if (action === 'restart') {
       // Restart App: re-run the splash screen, then loop back to the home page.
+      NavController.configure({ home: false, binder: false });
       let theme;
       try {
         theme = await call('get_theme', {});
@@ -108,7 +182,8 @@ async function mainLoop() {
     // 'launch' runs the card-selection flow
     const result = await runCardSelection();
     if (result === 'exit') { clearFlowState(); showExitScreen(); return; }
-    // 'restart' (from within the flow) loops back to main screen
+    if (result === 'binder') { await runBinder(); continue; }
+    // 'home' / 'restart' (from within the flow) loops back to the main screen
   }
 }
 
@@ -118,10 +193,9 @@ function showExitScreen() {
 }
 
 // ── Card selection flow ────────────────────────────────────────────────────
-// `resume` (optional) short-circuits already-completed steps after a
-// mid-flow page refresh: { gameId, selectedGame, setId, selectedSet,
-// selectedCardNames } to resume at card selection, or additionally
-// { step: 'optimizer', chosenCards, filters } to resume at the optimizer.
+// Ends at the "add to binder?" prompt (returns 'binder' on yes). `resume` (optional)
+// short-circuits already-completed steps after a mid-flow refresh:
+// { gameId, selectedGame, setId, selectedSet, selectedCardNames }.
 async function runCardSelection(resume = null) {
   let selectedGame, gameId;
 
@@ -141,12 +215,14 @@ async function runCardSelection(resume = null) {
     }
 
     const gameNames = Object.keys(categories).sort();
+    NavController.configure({ home: true, binder: true, guard: true });
     selectedGame = await showGridSelectWithSearch(
       gameNames,
       'Select a game:',
       { cols: 3, extraKeys: { r: '__restart__', q: '__exit__' } },
     );
 
+    if (selectedGame && selectedGame.__nav) return navOutcome(selectedGame.__nav);
     if (!selectedGame) return 'restart';
     if (selectedGame === '__restart__') return 'restart';
     if (selectedGame === '__exit__')    return 'exit';
@@ -154,8 +230,7 @@ async function runCardSelection(resume = null) {
     gameId = categories[selectedGame];
   }
 
-  // Checkpoint: game is picked. A refresh from here on (set loading/picking,
-  // card loading) resumes past this step instead of restarting at the splash.
+  // Checkpoint: game is picked. A refresh from here on resumes past this step.
   saveFlowState({ gameId, selectedGame, step: 'game' });
 
   let selectedSet, setId;
@@ -221,12 +296,14 @@ async function runCardSelection(resume = null) {
     }
 
     // ── 3. Set selection ───────────────────────────────────────────────────
+    NavController.configure({ home: true, binder: true, guard: true });
     selectedSet = await showAutocomplete(
       setNames,
       `Select a set (${selectedGame}):`,
       { showRefreshBtn: true },
     );
 
+    if (selectedSet && selectedSet.__nav) return navOutcome(selectedSet.__nav);
     if (!selectedSet) return 'restart';
 
     if (selectedSet === '__refresh__') {
@@ -255,8 +332,7 @@ async function runCardSelection(resume = null) {
     setId = sets[selectedSet];
   }
 
-  // Checkpoint: set is picked. A refresh during card loading now resumes
-  // straight to card selection instead of restarting at the splash.
+  // Checkpoint: set is picked. A refresh during card loading resumes to card selection.
   saveFlowState({ gameId, selectedGame, setId, selectedSet, step: 'set' });
 
   // ── 4. Card loading ────────────────────────────────────────────────────── (always re-run: cheap and backend-cached)
@@ -279,193 +355,198 @@ async function runCardSelection(resume = null) {
     return 'restart';
   }
 
-  const itemMeta = allCards.map(name => cardMap[name]);
+  const itemMeta  = allCards.map(name => cardMap[name]);
   const baseState = { gameId, selectedGame, setId, selectedSet };
 
-  // Resuming past card selection: the cart was already confirmed pre-refresh.
-  if (resume && resume.step === 'optimizer' && resume.chosenCards && resume.chosenCards.length) {
-    return resumeOptimizer(resume.chosenCards, selectedSet, cardMap, resume.filters, baseState);
+  // ── 5. Card multi-select → "add to binder?" ──────────────────────────────
+  let lastSelection = resume && resume.selectedCardNames;
+  while (true) {
+    NavController.configure({ home: true, binder: true, guard: true });
+    const selectResult = await showMultiSelect(
+      allCards,
+      `Select cards from ${selectedSet}:`,
+      {
+        itemMeta,
+        initialSelected: lastSelection,
+        onSelectionChange: names => saveFlowState({ ...baseState, step: 'cards', selectedCardNames: names }),
+      },
+    );
+
+    if (selectResult && selectResult.__nav) return navOutcome(selectResult.__nav);
+    if (selectResult.action === 'exit')    return 'exit';
+    if (selectResult.action === 'restart') return 'restart';
+
+    const chosenCards = selectResult.selected;
+    if (!chosenCards.length) {
+      const back = await showConfirm('No cards selected. Go back to card selection?');
+      if (back) { lastSelection = []; continue; }
+      return 'home';
+    }
+
+    const n = chosenCards.length;
+    const addIt = await showConfirm(`Add ${n} card${n === 1 ? '' : 's'} from ${selectedSet} to your binder?`);
+    if (!addIt) { lastSelection = chosenCards; continue; }   // No → back to card page, selection intact
+
+    const cardsToAdd = chosenCards.map(name => {
+      const meta = cardMap[name] || {};
+      return {
+        productId:   meta.productId,
+        printing:    meta.printing,
+        displayName: name,
+        number:      meta.number,
+        setId,
+        setName:     selectedSet,
+        gameId,
+        gameName:    selectedGame,
+      };
+    });
+    binder.addCards(cardsToAdd);
+    NavController.updateBadge();
+    return 'binder';
   }
+}
 
-  // ── 5. Card multi-select ─────────────────────────────────────────────────
-  const selectResult = await showMultiSelect(
-    allCards,
-    `Select cards from ${selectedSet}:`,
-    {
-      itemMeta,
-      initialSelected: resume && resume.selectedCardNames,
-      onSelectionChange: names => saveFlowState({ ...baseState, step: 'cards', selectedCardNames: names }),
-    },
-  );
+// ── Binder page ──────────────────────────────────────────────────────────────
+// Ensures listings for the whole binder are scraped (delta only), then loops the
+// binder screen, reacting to filter changes / deletes (re-optimize in place) and
+// refresh / clear / confirm-cart actions.
+async function runBinder() {
+  NavController.configure({ home: true, binder: false, guard: false });
+  saveFlowState({ step: 'binder' });
 
-  if (selectResult.action === 'exit')    return 'exit';
-  if (selectResult.action === 'restart') return 'restart';
+  while (true) {
+    const cards = binder.getCards();
+    if (!cards.length) { await showBinderEmpty(); return; }
 
-  const chosenCards = selectResult.selected;
-  if (!chosenCards.length) {
-    const ok = await showConfirm('No cards selected. Go back to card selection?');
-    return ok ? 'restart' : 'exit';
+    // Scrape only cards we don't already have cached (survives a backend restart,
+    // which empties the cache → everything counts as missing → full re-scrape).
+    if (await ensureBinderListings(cards) === 'error') return;
+
+    const cardIds = cards.map(c => c.id);
+
+    let filterOptions = { conditions: [], sellerQuals: [] };
+    try {
+      const fo = await call('get_filter_options', { cardIds });
+      filterOptions = { conditions: fo.conditions || [], sellerQuals: fo.sellerQuals || [] };
+    } catch (_) {}
+
+    const saved          = binder.getFilters();
+    const defaultFilters = { conditions: saved.conditions || [], quals: saved.quals || [] };
+
+    const optLog = showLogScreen('Optimizing binder…');
+    let optimizeResult;
+    try {
+      optimizeResult = await call('optimize_filtered', {
+        conditions:  defaultFilters.conditions,
+        sellerQuals: defaultFilters.quals,
+        cardIds,
+      });
+    } catch (err) {
+      optLog.header('Optimizer error.');
+      optLog.muted(err.message);
+      await waitForKey('Press Enter to go back.');
+      return;
+    }
+
+    const firstCart   = optimizeResult.firstCart || optimizeResult.cart || [];
+    const defaultCart = optimizeResult.cart      || firstCart;
+    const overrides   = optimizeResult.overrides || [];
+
+    let logHandler;
+    const logHandlerFn = msg => { if (msg.type === 'backend_log' && logHandler) logHandler(msg.text); };
+    on('backend_log', logHandlerFn);
+
+    NavController.configure({ home: true, binder: false, guard: false });
+    const result = await showBinder(firstCart, defaultCart, filterOptions, defaultFilters, {
+      cards,
+      initialOverrides: overrides,
+      onLog:           fn => { logHandler = fn; },
+      onFiltersChange: f  => binder.saveBinderFilters(f),
+      onDeleteCard:    id => { binder.removeCard(id); NavController.updateBadge(); },
+    });
+
+    off('backend_log', logHandlerFn);
+
+    if (result && result.__nav) return;              // home icon (binder icon hidden here)
+
+    const action = result.action;
+    if (action === 'home' || action === 'empty') {
+      if (action === 'empty') { await showBinderEmpty(); }
+      return;
+    }
+    if (action === 'refresh') {
+      const tasks = binder.getCards().map(binder.toTask);
+      if (await scrapeListings(tasks, { merge: true }) === 'error') return;
+      continue;                                      // re-optimize + re-show
+    }
+    if (action === 'clear') {
+      const yes = await showConfirm('Clear your entire binder? This removes all cards.');
+      if (yes) { binder.clearBinder(); NavController.updateBadge(); await showBinderEmpty(); return; }
+      continue;                                      // re-show binder unchanged
+    }
+    if (action === 'confirm') {
+      const outcome = await createCartAndHandoff(result);
+      if (outcome === 'cancelled') continue;         // back to binder (contents kept)
+      return;                                        // handed off → home (binder kept)
+    }
+    return;
   }
+}
 
-  // Build task list for the backend's fetch_listings handler.
-  const tasks = chosenCards.map(name => {
-    const meta = cardMap[name] || {};
-    return { productId: meta.productId, printing: meta.printing, displayName: name };
-  });
+// Empty-binder landing (delete-all, last-card delete, or cold open via the icon).
+async function showBinderEmpty() {
+  NavController.configure({ home: true, binder: false, guard: false });
+  saveFlowState({ step: 'binder' });
+  const log = showLogScreen('Your binder is empty');
+  log.muted('');
+  log.muted('Pick some cards from a set to start building your binder,');
+  log.muted('then optimize the whole thing here in one place.');
+  log.muted('');
+  await waitForKey('Press Enter to go to the home screen.');
+}
 
-  // Checkpoint: cards are confirmed. A refresh during the listings fetch below
-  // now resumes via resumeOptimizer(), which re-scrapes (since nothing is
-  // cached yet) instead of restarting at the splash.
-  saveFlowState({ ...baseState, step: 'optimizer', chosenCards, filters: null });
+// Fetch listings for any binder cards not already cached (delta), merging into the
+// backend cache. Returns 'ok' or 'error' (error screen already shown).
+async function ensureBinderListings(cards) {
+  let cached;
+  try { cached = await call('check_listings_cache', {}); } catch (_) { cached = { productIds: [] }; }
+  const have    = new Set(cached.productIds || []);
+  const missing = cards.filter(c => !have.has(c.id));
+  if (!missing.length) return 'ok';
+  return scrapeListings(missing.map(binder.toTask), { merge: true });
+}
 
-  // ── 6. Fetch listings with progress ─────────────────────────────────────
-  const { onComplete: onListingComplete, onPage, onDebug } = showProgress(chosenCards.length);
-
-  const listingProgress = msg => {
-    if (msg.type === 'progress')           onListingComplete(msg.card || '');
+// Run the listings scrape with the streaming progress screen.
+async function scrapeListings(tasks, { merge = false } = {}) {
+  const { onComplete, onPage, onDebug } = showProgress(tasks.length);
+  const handler = msg => {
+    if (msg.type === 'progress')           onComplete(msg.card || '');
     if (msg.type === 'card_page_progress') onPage(msg.card || '', msg.fetched || 0);
     if (msg.type === 'backend_log')        onDebug(msg.text || '');
   };
-  on('progress',            listingProgress);
-  on('card_page_progress',  listingProgress);
-  on('backend_log',         listingProgress);
-
+  on('progress',           handler);
+  on('card_page_progress', handler);
+  on('backend_log',        handler);
   try {
-    await call('fetch_listings', { tasks });
+    await call('fetch_listings', { tasks, merge });
   } catch (err) {
-    off('progress',           listingProgress);
-    off('card_page_progress', listingProgress);
-    off('backend_log',        listingProgress);
+    off('progress', handler); off('card_page_progress', handler); off('backend_log', handler);
     showLogScreen('Error fetching listings.').muted(err.message);
     await waitForKey('Press Enter to go back.');
-    return 'restart';
+    return 'error';
   }
-  off('progress',           listingProgress);
-  off('card_page_progress', listingProgress);
-  off('backend_log',        listingProgress);
-
-  return runOptimizeFlow(chosenCards, selectedSet, null, baseState);
+  off('progress', handler); off('card_page_progress', handler); off('backend_log', handler);
+  return 'ok';
 }
 
-// Resumes directly at the optimizer screen after a mid-flow refresh, skipping
-// card selection. The backend's listing cache is global/single-user (see
-// api.py) so it normally survives a browser refresh untouched — but not a
-// backend restart, so we verify the cards we need are still cached and only
-// re-scrape if they aren't.
-async function resumeOptimizer(chosenCards, selectedSet, cardMap, filters, baseState) {
-  let cacheCheck;
-  try {
-    cacheCheck = await call('check_listings_cache', {});
-  } catch (_) {
-    cacheCheck = { productIds: [] };
-  }
-  const cachedIds = new Set((cacheCheck.productIds || []).map(String));
+// Confirm + build the TCGPlayer cart, then show the bookmarklet handoff. The binder
+// is intentionally NOT cleared, so the user can return and keep working.
+// Returns 'cancelled' if the user backs out of the confirm, else 'done'.
+async function createCartAndHandoff(result) {
+  const finalCart = result.cart;
+  const cartTitle = result.cartTitle || 'Cart';
+  const summary   = result.summary   || buildSummary(finalCart);
 
-  const tasks = chosenCards.map(name => {
-    const meta = cardMap[name] || {};
-    return { productId: meta.productId, printing: meta.printing, displayName: name };
-  });
-  const allCached = tasks.length > 0 && tasks.every(t => cachedIds.has(String(t.productId)));
-
-  if (!allCached) {
-    const { onComplete: onListingComplete, onPage, onDebug } = showProgress(chosenCards.length);
-    const listingProgress = msg => {
-      if (msg.type === 'progress')           onListingComplete(msg.card || '');
-      if (msg.type === 'card_page_progress') onPage(msg.card || '', msg.fetched || 0);
-      if (msg.type === 'backend_log')        onDebug(msg.text || '');
-    };
-    on('progress',            listingProgress);
-    on('card_page_progress',  listingProgress);
-    on('backend_log',         listingProgress);
-
-    try {
-      await call('fetch_listings', { tasks });
-    } catch (err) {
-      off('progress',           listingProgress);
-      off('card_page_progress', listingProgress);
-      off('backend_log',        listingProgress);
-      showLogScreen('Error fetching listings.').muted(err.message);
-      await waitForKey('Press Enter to go back.');
-      return 'restart';
-    }
-    off('progress',           listingProgress);
-    off('card_page_progress', listingProgress);
-    off('backend_log',        listingProgress);
-  }
-
-  return runOptimizeFlow(chosenCards, selectedSet, filters, baseState);
-}
-
-// ── Optimize flow ──────────────────────────────────────────────────────────
-// `resumeFilters` (optional), shaped { conditions, quals }, reapplies the
-// user's last-chosen filters when resuming after a refresh instead of the
-// backend's defaults.
-async function runOptimizeFlow(chosenCards, setName, resumeFilters, baseState) {
-  // ── 1. Get filter options ────────────────────────────────────────────────
-  let filterOptions = { conditions: [], sellerQuals: [] };
-  let defaultFilters = resumeFilters || {};
-  try {
-    const fo = await call('get_filter_options', {});
-    filterOptions  = { conditions: fo.conditions || [], sellerQuals: fo.sellerQuals || [] };
-    if (!resumeFilters) defaultFilters = { conditions: fo.defaultConditions || [], quals: fo.defaultQuals || [] };
-  } catch (_) {}
-
-  // ── 2. Initial optimized cart ────────────────────────────────────────────
-  const optLog = showLogScreen('Running optimizer…');
-  let optimizeResult;
-  try {
-    optimizeResult = await call('optimize_filtered', {
-      conditions:  defaultFilters.conditions || [],
-      sellerQuals: defaultFilters.quals || [],
-    });
-  } catch (err) {
-    optLog.header('Optimizer error.');
-    optLog.muted(err.message);
-    await waitForKey('Press Enter to go back.');
-    return 'restart';
-  }
-
-  const firstCart   = optimizeResult.firstCart   || optimizeResult.cart || [];
-  const defaultCart = optimizeResult.cart         || firstCart;
-  const overrides   = optimizeResult.overrides    || [];
-
-  // ── 3. Dynamic optimizer screen ──────────────────────────────────────────
-  let logHandler;
-  const logHandlerFn = msg => { if (msg.type === 'backend_log' && logHandler) logHandler(msg.text); };
-  on('backend_log', logHandlerFn);
-
-  const optimizerResult = await showDynamicOptimizer(
-    firstCart,
-    defaultCart,
-    filterOptions,
-    defaultFilters,
-    {
-      totalCards: chosenCards.length,
-      initialOverrides: overrides,
-      onLog: fn => { logHandler = fn; },
-      onFiltersChange: filters => {
-        if (baseState) {
-          saveFlowState({
-            ...baseState,
-            step: 'optimizer',
-            chosenCards,
-            filters: { conditions: filters.conditions, quals: filters.sellerQuals },
-          });
-        }
-      },
-    },
-  );
-
-  off('backend_log', logHandlerFn);
-
-  if (optimizerResult.action === 'restart') return 'restart';
-  if (optimizerResult.action === 'home')    return 'restart';
-
-  const finalCart    = optimizerResult.cart;
-  const cartTitle    = optimizerResult.cartTitle || 'Cart';
-  const summary      = optimizerResult.summary   || buildSummary(finalCart);
-
-  // ── 4. Confirm cart creation ─────────────────────────────────────────────
   const lines = [
     `Cart: ${cartTitle}`,
     `${summary.cards} items  •  ${summary.sellers} sellers`,
@@ -475,9 +556,8 @@ async function runOptimizeFlow(chosenCards, setName, resumeFilters, baseState) {
   ].join('\n');
 
   const confirmed = await showConfirm(lines);
-  if (!confirmed) return 'restart';
+  if (!confirmed) return 'cancelled';
 
-  // ── 5. Create cart with progress ─────────────────────────────────────────
   const cartProgress = showCartProgress(finalCart.length, {
     cartTitle,
     cards:    summary.cards,
@@ -499,15 +579,13 @@ async function runOptimizeFlow(chosenCards, setName, resumeFilters, baseState) {
     off('cart_progress', cartProgressHandler);
     showLogScreen('Cart creation failed.').muted(err.message);
     await waitForKey('Press Enter to go back.');
-    return 'restart';
+    return 'done';
   }
   off('cart_progress', cartProgressHandler);
 
-  // ── 6. Show cart result ──────────────────────────────────────────────────
   showCartResult(cartResult);
-  await waitForKey('Press Enter to return to home screen.');
-
-  return 'restart';
+  await waitForKey('Press Enter to return to the home screen. Your binder is saved.');
+  return 'done';
 }
 
 // ── Entry ──────────────────────────────────────────────────────────────────
