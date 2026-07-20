@@ -39,7 +39,56 @@ html, body {
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  /* Reserve a strip at the top for the persistent nav chrome (home/binder icons)
+     so they never overlap prompt/hint text. */
+  padding-top: 28px;
 }
+
+/* ── persistent nav chrome (home/binder icons) ────────────────────────── */
+#nav-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;   /* only the buttons are interactive */
+  z-index: 50;            /* above screens, below modals (100) */
+}
+.nav-icon {
+  position: absolute;
+  top: 5px;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--muted);
+  color: var(--secondary);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.nav-icon[hidden] { display: none; }
+.nav-icon:hover { border-color: var(--primary); color: var(--primary); }
+.nav-home   { left: 5px; }
+.nav-binder { right: 5px; }
+.nav-icon-glyph { font-size: 15px; }
+.nav-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #000;
+  font-size: 11px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav-badge[hidden] { display: none; }
 
 /* ── hint / prompt bars ───────────────────────────────────────────────── */
 .hint {
@@ -384,6 +433,8 @@ html, body {
   padding: 4px 8px;
   border-top: 1px solid #333;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .optimizer-actions .hint.clickable {
   cursor: pointer;
@@ -395,6 +446,109 @@ html, body {
 .optimizer-actions .hint.clickable:active {
   color: var(--primary);
 }
+
+/* ── binder card list (fills the old inline notice-box space) ──────────── */
+.binder-list-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #333;
+  overflow: hidden;
+  min-height: 4em;
+}
+.binder-list-head {
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  flex: none;
+}
+.binder-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);   /* JS overrides responsively */
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 0 10px;
+  padding: 0 8px 4px;
+}
+.binder-list::-webkit-scrollbar { width: 6px; }
+.binder-list::-webkit-scrollbar-thumb { background: var(--muted); }
+
+.binder-card {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 4px;
+  min-width: 0;
+}
+.binder-card-name {
+  color: var(--secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.binder-card-set {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 30%;
+  min-width: 0;
+}
+.binder-card-price {
+  color: var(--accent);
+  font-size: 12px;
+  flex: none;
+  white-space: nowrap;
+}
+.binder-card-del {
+  color: #cc6666;
+  cursor: pointer;
+  flex: none;
+  padding: 0 2px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.binder-card-del:hover { color: #ff8888; }
+
+/* ── notices button + bubble + popover panel ──────────────────────────── */
+.notices-btn .notices-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  margin-left: 3px;
+  border-radius: 8px;
+  background: #ffaa55;
+  color: #000;
+  font-size: 10px;
+  font-weight: bold;
+}
+.notices-panel {
+  display: none;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 34px;              /* just above the action bar */
+  max-height: 45%;
+  overflow-y: auto;
+  background: #0a0a0a;
+  border: 1px solid var(--muted);
+  padding: 6px 8px;
+  z-index: 60;
+}
+.notices-panel.show { display: block; }
+.notices-panel::-webkit-scrollbar { width: 6px; }
+.notices-panel::-webkit-scrollbar-thumb { background: var(--muted); }
+.notices-panel-title { color: var(--secondary); font-size: 12px; margin-bottom: 4px; }
 
 /* ── confirm dialog ───────────────────────────────────────────────────── */
 .modal-overlay {
@@ -626,6 +780,10 @@ html, body {
 
   .optimizer-actions { gap: 18px; padding: 8px 10px; }
   .optimizer-actions .hint.clickable { padding: 8px 6px; font-size: 14px; }
+
+  .nav-icon { padding: 8px 10px; font-size: 14px; }
+  .binder-card { padding: 6px 4px; }
+  .binder-card-del { padding: 4px 8px; font-size: 16px; }
 
   .wait-key-bar { padding: 14px 10px; }
 

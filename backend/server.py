@@ -580,11 +580,25 @@ def _apply_filters(listings, conditions, seller_quals):
     return result
 
 
+def _card_id(product_id, printing):
+    """Stable per-card identity used as the listing-cache key and shared with the
+    frontend binder. Keeping printing in the key lets two printings of one product
+    (same productId) coexist instead of colliding. Must match the frontend's
+    `${productId}:${printing || ''}` exactly."""
+    return f"{product_id}:{printing or ''}"
+
+
 def handle_fetch_listings(params):
-    """Fetch all listings for every task, emitting progress events as each card finishes."""
+    """Fetch all listings for every task, emitting progress events as each card finishes.
+
+    When params["merge"] is true, the freshly-scraped cards are merged into the
+    existing cache (used by the binder, which scrapes only newly-added cards);
+    otherwise the cache is replaced wholesale (the original single-set behavior).
+    """
     global _cached_card_data
 
     tasks = params["tasks"]
+    merge = params.get("merge", False)
     max_workers = min(16, len(tasks))
 
     all_card_data = {}
@@ -604,20 +618,24 @@ def handle_fetch_listings(params):
         for future in as_completed(future_map):
             t = future_map[future]
             pid, name = t["productId"], t["displayName"]
+            cid = t.get("cardId") or _card_id(pid, t.get("printing"))
             try:
                 raw = future.result()
             except Exception as e:
                 _log(f"Error fetching {name}: {e}")
                 raw = []
             normalized = _normalize_listings(raw)
-            all_card_data[str(pid)] = {
+            all_card_data[cid] = {
                 "card_info": {"name": name, "total_active_listings": len(normalized)},
                 "market_listings": normalized,
             }
             done += 1
             _progress(done=done, total=total, card=name)
 
-    _cached_card_data = all_card_data
+    if merge:
+        _cached_card_data.update(all_card_data)
+    else:
+        _cached_card_data = all_card_data
     return all_card_data
 
 
@@ -681,13 +699,27 @@ def _apply_filters_with_fallback(card_data_map, conditions, seller_quals):
     return filtered_data, overrides
 
 
+def _scoped_cache(card_ids):
+    """Restrict the global listing cache to an explicit set of card ids (the binder
+    contents). Preserves the caller's card order. When card_ids is falsy, returns the
+    whole cache (original single-set behavior)."""
+    if not card_ids:
+        return dict(_cached_card_data)
+    return {cid: _cached_card_data[cid] for cid in card_ids if cid in _cached_card_data}
+
+
 def handle_optimize_filtered(params):
-    """Run optimizer against cached listings with dynamic filter criteria applied."""
+    """Run optimizer against cached listings with dynamic filter criteria applied.
+
+    params["cardIds"] (optional) scopes optimization to just those cards — the binder
+    passes its current contents so deleted cards drop out without needing eviction.
+    """
     conditions   = params.get("conditions") or []
     seller_quals = params.get("sellerQuals") or []
+    card_ids     = params.get("cardIds")
 
     filtered_data, overrides = _apply_filters_with_fallback(
-        _cached_card_data, conditions, seller_quals
+        _scoped_cache(card_ids), conditions, seller_quals
     )
 
     if overrides:
@@ -697,7 +729,7 @@ def handle_optimize_filtered(params):
 
     # Cheapest individual listing per card (no seller bundling) — shown as "First Listing" cart.
     first_cart = []
-    for card_data in filtered_data.values():
+    for cid, card_data in filtered_data.items():
         name     = card_data["card_info"]["name"]
         listings = card_data["market_listings"]
         if listings:
@@ -705,7 +737,8 @@ def handle_optimize_filtered(params):
             entry = best.copy()
         else:
             entry = {"seller": None, "price": 0.0, "shipping": 0.0, "total": 0.0, "sku": None}
-        entry["card"] = name
+        entry["card"]   = name
+        entry["cardId"] = cid
         first_cart.append(entry)
 
     return {
@@ -718,7 +751,7 @@ def handle_optimize_filtered(params):
 def handle_get_filter_options(params):
     """
     Return the conditions and seller qualifications actually present in the cached data,
-    ordered canonically.
+    ordered canonically. params["cardIds"] (optional) scopes to the binder contents.
     """
     CONDITION_ORDER = ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"]
     QUAL_ORDER      = ["Verified", "Direct", "WPN"]
@@ -726,7 +759,7 @@ def handle_get_filter_options(params):
     conditions_seen = set()
     quals_seen      = set()
 
-    for card_data in _cached_card_data.values():
+    for card_data in _scoped_cache(params.get("cardIds")).values():
         for listing in card_data.get("market_listings", []):
             cond = listing.get("condition")
             if cond:

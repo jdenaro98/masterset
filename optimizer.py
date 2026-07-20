@@ -5,34 +5,37 @@ def optimize(all_card_data):
     if not all_card_data:
         return []
 
-    card_names = [card_data["card_info"]["name"] for card_data in all_card_data.values()]
+    # Identity is the dict key (a stable card id — productId[:printing]), NOT the
+    # display name: a multi-set/multi-game binder can hold two different cards that
+    # share a name (e.g. "Pikachu" from two sets), and keying by name would collapse
+    # them into one. The display name rides along on each entry as "card".
+    card_ids  = list(all_card_data.keys())
+    name_of   = {cid: cd["card_info"]["name"] for cid, cd in all_card_data.items()}
 
     # 1. For each card, find the cheapest possible total (price + individual shipping)
     #    and keep a reference to that listing so we can fall back to it later.
     market_floor = {}
     floor_listing = {}
-    for product_id, card_data in all_card_data.items():
-        card = card_data["card_info"]["name"]
+    for cid, card_data in all_card_data.items():
         listings = card_data["market_listings"]
         if listings:
             best = min(listings, key=lambda lst: lst["total"])
-            market_floor[card] = best["total"]
-            floor_listing[card] = best
+            market_floor[cid] = best["total"]
+            floor_listing[cid] = best
         else:
-            market_floor[card] = math.inf
-            floor_listing[card] = None
+            market_floor[cid] = math.inf
+            floor_listing[cid] = None
 
-    # 2. Build Seller Map: seller → { card_name: best_listing_from_that_seller }
+    # 2. Build Seller Map: seller → { card_id: best_listing_from_that_seller }
     seller_map = {}
-    for product_id, card_data in all_card_data.items():
-        card = card_data["card_info"]["name"]
+    for cid, card_data in all_card_data.items():
         listings = card_data["market_listings"]
         for listing in listings:
             s_name = listing["seller"]
             if s_name not in seller_map:
                 seller_map[s_name] = {}
-            if card not in seller_map[s_name] or listing["total"] < seller_map[s_name][card]["total"]:
-                seller_map[s_name][card] = listing
+            if cid not in seller_map[s_name] or listing["total"] < seller_map[s_name][cid]["total"]:
+                seller_map[s_name][cid] = listing
 
     # 3. Greedy: each round pick the seller whose batch saves the most dollars vs.
     #    buying every card in that batch individually at its market floor price.
@@ -40,7 +43,7 @@ def optimize(all_card_data):
     #    to individual cheapest listings so we never inflate the total for the sake
     #    of reducing seller count.
     final_assignment = {}
-    uncovered_cards = set(card_names)
+    uncovered_cards = set(card_ids)
 
     while uncovered_cards:
         best_seller = None
@@ -70,7 +73,8 @@ def optimize(all_card_data):
 
         for c in list(uncovered_cards.intersection(seller_map[best_seller].keys())):
             full_listing = seller_map[best_seller][c].copy()
-            full_listing["card"] = c
+            full_listing["card"]   = name_of[c]
+            full_listing["cardId"] = c
             final_assignment[c] = full_listing
             uncovered_cards.discard(c)
 
@@ -79,11 +83,12 @@ def optimize(all_card_data):
         listing = floor_listing.get(c)
         if listing:
             entry = listing.copy()
-            entry["card"] = c
+            entry["card"]   = name_of[c]
+            entry["cardId"] = c
             final_assignment[c] = entry
             uncovered_cards.discard(c)
 
-    return [final_assignment.get(card, _empty_result(card)) for card in card_names]
+    return [final_assignment.get(cid, _empty_result(name_of[cid], cid)) for cid in card_ids]
 
 
 def _estimate_shipping(inventory, card_subset):
@@ -95,9 +100,10 @@ def _estimate_shipping(inventory, card_subset):
     return max(inventory[c]["shipping"] for c in card_subset)
 
 
-def _empty_result(card_name):
+def _empty_result(card_name, card_id=None):
     return {
         "card":               card_name,
+        "cardId":             card_id,
         "seller":             None,
         "price":              0.0,
         "shipping":           0.0,
